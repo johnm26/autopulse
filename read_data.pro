@@ -59,4 +59,4 @@ for iqtr=1,12 do begin &$
 ;  oplot,time[jqtr]-55000d0,fqtr/median(fqtr),psym=3,col=255 & char=get_kbrd(1) &$
   endif&$
 endfor
-;plot,time-54900d0,fflat,ys=1,psym=3
+plot,time-54900d0,fflat,ys=1,psym=3
