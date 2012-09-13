@@ -8,7 +8,7 @@
 ;; 3.  Write query to file
 ;-
 function make_sql_query_macro, $
-                               kepler_id=kepler_id, $
+                               in_kepler_id=in_kepler_id, $
                                out_scriptfile_name=out_scriptfile_name, $
                                log_lun=log_lun
 
@@ -30,8 +30,8 @@ IF SIZE(out_scriptfile_name, /TYPE) NE 7 THEN BEGIN
     SAVE, FILENAME='error_make_sql_query_macro.sav', /ALL
     RETURN, err_msg
 ENDIF
-IF SIZE(kepler_id, /TYPE) NE 2 AND SIZE(kepler_id, /TYPE) NE 3 THEN BEGIN
-    err_msg = SYSTIME(/UTC) + "|ERROR|make_sql_query_macro|The specified kepler_id was not an int or a long int."
+IF SIZE(in_kepler_id, /TYPE) NE 7 THEN BEGIN
+    err_msg = SYSTIME(/UTC) + "|ERROR|make_sql_query_macro|The specified in_kepler_id was not a string."
     PRINT, err_msg
     PRINTF, log_lun, err_msg
     SAVE, FILENAME='error_make_sql_query_macro.sav', /ALL
@@ -40,7 +40,7 @@ ENDIF
 ;;=============================================================================
 ;;2.  Form text of SQL query script
 ;;=============================================================================
-text_line_1 = 'SELECT * FROM source where KEPLERID='+string(kepler_id)
+text_line_1 = 'SELECT * FROM source where KEPLERID='+in_kepler_id
 ;;=============================================================================
 ;;3.  Write text to file
 ;;=============================================================================
