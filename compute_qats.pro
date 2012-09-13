@@ -61,7 +61,7 @@ for ikid=0,nkid-1 do begin
         sntot[0,idepth,iq,0:n_elements(smaxnew)-1]=pgrid
         sntot[1,idepth,iq,0:n_elements(smaxnew)-1]=smaxnew
         snr=smaxnew*(pgrid/100d0)^.5d0
-        ;plot,pgrid,snr,/xl,ys=1
+        plot,pgrid,snr,/xl,ys=1
         i0=where(snr eq max(snr))
         print,idepth,iq,pgrid[i0[0]],smaxnew[i0[0]]
       endfor
