@@ -1,4 +1,14 @@
-pro fit_transit,kid,t0,period,pdot,td
+pro fit_transit, $
+                 kid, $
+                 t0, $
+                 period, $
+                 pdot, $
+                 td, $
+                 db_time=db_time, $
+                 db_flux=db_flux, $
+                 db_err_flux=db_err_flux, $
+                 db_quarter=db_quarter, $
+                 db_channel=db_channel
 ; 8/23/2012 This routine fits a transit light curve with a box-car
 ; transit shape of a specified depth (multiplied by a polynomial).  
 ; A delta-chi-square is computed relative to a fit with a single
@@ -6,10 +16,32 @@ pro fit_transit,kid,t0,period,pdot,td
 ; Remaining questions to figure out:  1) how do I pick a window?
 ; 2) how do I pick the polynomial order (AIC, BIC, F-test, etc)?
 
+;;1.  Set up internal variables
 @const
-
+;;2.1  Reading data from fits files
 @read_data
+;;2.2  Applying CBV's to database light curves
+status=make_cbv_corrected_lightcurve( $
+                                      time=db_time, $
+                                      flux=db_flux, $
+                                      err_flux=db_err_flux, $
+                                      channel=db_channel, $
+                                      quarter=db_quarter, $
+                                      cbv_data_dir='./DATA/', $
+                                      log_lun=log_lun $
+                                    )
+;;Compare CBV results
 time=time-55000d0
+db_time=db_time-55000d0
+plot,time,fflat,color=-1,psym=3,charsize=2,xtitle='time',ytitle='cbvsap_flux',title='KID 1432214'
+oplot,db_time,db_flux/median(db_flux),color=255,psym=3
+;stop
+;;Assign database-extracted light curve into the business end
+;;variables
+time=db_time
+fflat=db_flux
+sig=db_err_flux
+;;Resume Eric's unmodified code
 t0=t0-55000d0
 ; Baseline 'window' before & after transit for fitting polynomial:
 window=1d0

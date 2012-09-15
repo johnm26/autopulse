@@ -1,7 +1,10 @@
 ; For a given KID, finds all of the files, unzips, detrends,
 ; runs QATS, saves & outputs spectrum:
-
+;; @example:  IDL>  compute_qats,1432214,0.01,[1.0,300.0]
 pro compute_qats,kid0,f,prange
+;1.  Set up internal variables
+sql_macro_tmpfile_name='tmpMacroMySQL.sql'
+sql_queryresult_tmpfile_name='tmpResultMySQL.tab'
 q=0
 ; Now, find all of the KOIs for masking:
 restore,'koi_data01.sav'
@@ -14,6 +17,7 @@ nkid=n_elements(kid0)
 spawn,'gfortran -O3 -c qpt_detect.for -o qpt_detect.o'
 spawn,'gfortran -O3 test_qpt.for qpt_detect.o -o test_qpt'
 
+;2.  Loop over Kepler ID list
 for ikid=0,nkid-1 do begin
   kids=strcompress(kid0[ikid],/remove_all)
   print,'Working on KID: ',kids
@@ -30,9 +34,49 @@ for ikid=0,nkid-1 do begin
     pdot=dblarr(nplanet)
     print,'Removing: ',KOI[indx],t0[indx],period[indx],tdur[indx]
     spawn,'ls depth_distribution.sav',result
+;2.2 Clean up old temporary files
+    file_delete, $
+      sql_macro_tmpfile_name, $
+      sql_queryresult_tmpfile_name, $
+      /allow_nonexistent
+;2.3 Form the SQL query
+    status=make_sql_query_macro( $
+                                 in_kepler_id=kids, $
+                                 out_scriptfile_name=sql_macro_tmpfile_name, $
+                                 log_lun=log_lun $
+                               )
+;2.4 Execute the SQL query
+    status=make_query_to_sql_database_by_macro( $
+                               in_scriptfile_name=sql_macro_tmpfile_name, $
+                               out_queryresultfile_name=sql_queryresult_tmpfile_name, $
+                               log_lun=log_lun $
+                             )
+;2.5 Parse the query result
+    status=make_parsed_lightcurve_from_queryresult( $
+                                                    in_queryresultfile_name=sql_queryresult_tmpfile_name, $
+                                                    min_lines_required_in_queryresultfile=3, $
+                                                    out_time=time, $
+                                                    out_flux=flux, $
+                                                    out_err_flux=err_flux, $
+                                                    out_quarter=quarter, $
+                                                    out_channel=channel, $
+                                                    log_lun=log_lun $
+                                                  )
+
     if(result eq '') then begin
-      fit_transit,kids,t0[indx]+54900d0,period[indx],pdot,tdur[indx]/24d0
+        fit_transit, $
+          kids, $
+          t0[indx]+54900d0, $
+          period[indx], $
+          pdot, $
+          tdur[indx]/24d0, $
+          db_time=time, $
+          db_flux=flux, $
+          db_err_flux=err_flux, $
+          db_channel=channel, $
+          db_quarter=quarter
     endif
+
     restore,'depth_distribution.sav'
     chisq_array[where(chisq_array lt 0d0)]=0d0
     ntime=n_elements(time)

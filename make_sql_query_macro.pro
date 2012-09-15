@@ -40,7 +40,8 @@ ENDIF
 ;;=============================================================================
 ;;2.  Form text of SQL query script
 ;;=============================================================================
-text_line_1 = 'SELECT * FROM source where KEPLERID='+in_kepler_id
+;text_line_1 = 'SELECT * FROM source where KEPLERID='+in_kepler_id
+text_line_1 = 'select * from source inner join object on (object.keplerid =source.keplerid and object.quarter = source.quarter) where source.KEPLERID='+in_kepler_id
 ;;=============================================================================
 ;;3.  Write text to file
 ;;=============================================================================

@@ -5,15 +5,16 @@
 ;; @date 2012 Sep 13
 ;;
 ;; Summary of actions
-;; 2.  Read in query result
-;; 3.  Parse columns
+;; 3.  Read in query result and parse columns
 ;-
 function make_parsed_lightcurve_from_queryresult, $
                                                   in_queryresultfile_name=in_queryresultfile_name, $
                                                   min_lines_required_in_queryresultfile=min_lines_required_in_queryresultfile, $
                                                   out_time=out_time, $
                                                   out_flux=out_flux, $
-                                                  out_flux_err=out_flux_err, $
+                                                  out_err_flux=out_err_flux, $
+                                                  out_quarter=out_quarter, $
+                                                  out_channel=out_channel, $
                                                   log_lun=log_lun
 
 PRINT, SYSTIME(/UTC), "|Running make_parsed_lightcurve_from_queryresult"
@@ -58,14 +59,100 @@ ENDIF ELSE BEGIN
     ENDIF
 ENDELSE
 ;;=============================================================================
-;;2.  Read in query result
+;;2.  Set up internal variables
 ;;=============================================================================
+time_column_name='time'
+;flux_column_name='cbvsap_flux'
+flux_column_name='sap_flux'
+err_flux_column_name='sap_flux_err'
+quarter_column_name='quarter'
+channel_column_name='channel'
 ;;=============================================================================
-;;3.  Parse columns
+;;3.  Read in query result
 ;;=============================================================================
+;;3.1  Get number of columns and their names
+;;3.1.1  Initialize string variable to hold the column names
+column_names=''
+;;3.1.2  Read in the first line of the file and store the text as the
+;;column names
+openr,lun,in_queryresultfile_name,/get_lun
+readf,lun,column_names,format='(a)'
+;;3.1.3  Close the file
+free_lun,lun
+;;3.1.4  Split the column names line into an array of individual name strings
+column_names=strsplit(column_names,/extract)
+;;3.2  Figure out which columns we want to extract
+index_column_time=where(strmatch(column_names,time_column_name,/fold_case),count_column_time)
+IF count_column_time NE 1 THEN BEGIN
+        err_msg = SYSTIME(/UTC) + "|ERROR|make_parsed_lightcurve_from_queryresult|The specified column name was not found or ambiguous: " + time_column_name
+        PRINT, err_msg
+        PRINTF, log_lun, err_msg
+        SAVE, FILENAME='error_make_parsed_lightcurve_from_queryresult.sav', /ALL
+        RETURN, err_msg
+ENDIF
+index_column_flux=where(strmatch(column_names,flux_column_name,/fold_case),count_column_flux)
+IF count_column_flux NE 1 THEN BEGIN
+        err_msg = SYSTIME(/UTC) + "|ERROR|make_parsed_lightcurve_from_queryresult|The specified column name was not found or ambiguous: " + flux_column_name
+        PRINT, err_msg
+        PRINTF, log_lun, err_msg
+        SAVE, FILENAME='error_make_parsed_lightcurve_from_queryresult.sav', /ALL
+        RETURN, err_msg
+ENDIF
+index_column_err_flux=where(strmatch(column_names,err_flux_column_name,/fold_case),count_column_err_flux)
+IF count_column_err_flux NE 1 THEN BEGIN
+        err_msg = SYSTIME(/UTC) + "|ERROR|make_parsed_lightcurve_from_queryresult|The specified column name was not found or ambiguous: " + err_flux_column_name
+        PRINT, err_msg
+        PRINTF, log_lun, err_msg
+        SAVE, FILENAME='error_make_parsed_lightcurve_from_queryresult.sav', /ALL
+        RETURN, err_msg
+ENDIF
+index_column_quarter=where(strmatch(column_names,quarter_column_name,/fold_case),count_column_quarter)
+IF count_column_quarter LT 1 THEN BEGIN
+        err_msg = SYSTIME(/UTC) + "|ERROR|make_parsed_lightcurve_from_queryresult|The specified column name was not found: " + quarter_column_name
+        PRINT, err_msg
+        PRINTF, log_lun, err_msg
+        SAVE, FILENAME='error_make_parsed_lightcurve_from_queryresult.sav', /ALL
+        RETURN, err_msg
+ENDIF
+index_column_channel=where(strmatch(column_names,channel_column_name,/fold_case),count_column_channel)
+IF count_column_channel NE 1 THEN BEGIN
+        err_msg = SYSTIME(/UTC) + "|ERROR|make_parsed_lightcurve_from_queryresult|The specified column name was not found or ambiguous: " + channel_column_name
+        PRINT, err_msg
+        PRINTF, log_lun, err_msg
+        SAVE, FILENAME='error_make_parsed_lightcurve_from_queryresult.sav', /ALL
+        RETURN, err_msg
+ENDIF
+;;3.3  Assume the format of the file is one header line followed by
+;;float data
+rdfloat, $
+  in_queryresultfile_name, $
+  out_time, $
+  out_flux, $
+  out_err_flux, $
+  out_quarter, $
+  out_channel, $
+  columns=[ $
+            index_column_time+1, $
+            index_column_flux+1, $
+            index_column_err_flux+1, $
+            index_column_quarter[0]+1, $
+            index_column_channel+1 $
+          ], $
+  skipline=1, $
+  /double, $
+  /silent
+
+;;3.4  Integrity check on number of lines read compared to number of
+;;lines in the file
+if n_elements(out_time) ne n_lines_in_queryresultfile_name-1 then begin
+        err_msg = SYSTIME(/UTC) + "|ERROR|make_parsed_lightcurve_from_queryresult|The number of data lines ("+string(n_elements(out_time))+")read in from file "+in_queryresultfile_name+" did not match the expected number "+string(n_lines_in_queryresultfile_name-1)
+        PRINT, err_msg
+        PRINTF, log_lun, err_msg
+        SAVE, FILENAME='error_make_parsed_lightcurve_from_queryresult.sav', /ALL
+        RETURN, err_msg
+endif
 ;;=============================================================================
 ;;4.  Return success.
 ;;=============================================================================
-stop
 return,1
 end
