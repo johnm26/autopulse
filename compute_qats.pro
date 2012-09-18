@@ -45,12 +45,24 @@ for ikid=0,nkid-1 do begin
                                  out_scriptfile_name=sql_macro_tmpfile_name, $
                                  log_lun=log_lun $
                                )
+    IF SIZE(status, /TYPE) EQ 7 THEN BEGIN
+        err_msg = SYSTIME(/UTC) + "|ERROR|compute_qats|Halting on main level due to error status passed up from make_sql_query_macro."
+        PRINT, err_msg
+        PRINTF, log_lun, err_msg
+        stop
+    ENDIF
 ;2.4 Execute the SQL query
     status=make_query_to_sql_database_by_macro( $
                                in_scriptfile_name=sql_macro_tmpfile_name, $
                                out_queryresultfile_name=sql_queryresult_tmpfile_name, $
                                log_lun=log_lun $
                              )
+    IF SIZE(status, /TYPE) EQ 7 THEN BEGIN
+        err_msg = SYSTIME(/UTC) + "|ERROR|compute_qats|Halting on main level due to error status passed up from make_query_to_sql_database_by_macro."
+        PRINT, err_msg
+        PRINTF, log_lun, err_msg
+        stop
+    ENDIF
 ;2.5 Parse the query result
     status=make_parsed_lightcurve_from_queryresult( $
                                                     in_queryresultfile_name=sql_queryresult_tmpfile_name, $
@@ -62,7 +74,12 @@ for ikid=0,nkid-1 do begin
                                                     out_channel=channel, $
                                                     log_lun=log_lun $
                                                   )
-
+    IF SIZE(status, /TYPE) EQ 7 THEN BEGIN
+        err_msg = SYSTIME(/UTC) + "|ERROR|compute_qats|Halting on main level due to error status passed up from make_parsed_lightcurve_from_queryresult."
+        PRINT, err_msg
+        PRINTF, log_lun, err_msg
+        stop
+    ENDIF
     if(result eq '') then begin
         fit_transit, $
           kids, $

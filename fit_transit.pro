@@ -19,8 +19,8 @@ pro fit_transit, $
 ;;1.  Set up internal variables
 @const
 ;;2.1  Reading data from fits files
-@read_data
-;;2.2  Applying CBV's to database light curves
+;@read_data
+;;2.2  Applying CBV's to SQL database light curves
 status=make_cbv_corrected_lightcurve( $
                                       time=db_time, $
                                       flux=db_flux, $
@@ -31,11 +31,10 @@ status=make_cbv_corrected_lightcurve( $
                                       log_lun=log_lun $
                                     )
 ;;Compare CBV results
-time=time-55000d0
+;time=time-55000d0
 db_time=db_time-55000d0
-plot,time,fflat,color=-1,psym=3,charsize=2,xtitle='time',ytitle='cbvsap_flux',title='KID 1432214'
-oplot,db_time,db_flux/median(db_flux),color=255,psym=3
-;stop
+;plot,time,fflat,color=-1,psym=3,charsize=2,xtitle='time',ytitle='cbvsap_flux',title='KID 1432214'
+;oplot,db_time,db_flux/median(db_flux),color=255,psym=3
 ;;Assign database-extracted light curve into the business end
 ;;variables
 time=db_time
