@@ -103,8 +103,13 @@ for ikid=0,nkid-1 do begin
     ncadence=long(round((max(time)-min(time))/gap0) +1L) & sigma=1d-4
     cadence=round((time-min(time))/gap0)
     timetotal=min(time)+(max(time)-min(time))*dindgen(ncadence)/double(ncadence-1L)
-    sntot=dblarr(2,ndepth,ndur,nperiod)
+    sntot=dblarr(4,ndepth,ndur,nperiod)
+    chisq_rat_max=0d0
+    chisq_diff_max=0d0
+    set_plot,'ps'
+    device,filename='kid'+kids+'_qats.ps'
     for idepth=1,ndepth-1 do begin
+;    for idepth=1,16 do begin
 ;    for idepth=9,9 do begin
 ;      for iq=8,8 do begin
 ;      for iq=13,13 do begin
@@ -119,16 +124,53 @@ for ikid=0,nkid-1 do begin
         spawn,'./test_qpt'
         readcol,'qats_spectrum.txt',tminnew,tmaxnew,mmnew,qnew,smaxnew,mbestnew,/silent
         pgrid=(tminnew+tmaxnew)*.5d0*gap0
-        sntot[0,idepth,iq,0:n_elements(smaxnew)-1]=pgrid
-        sntot[1,idepth,iq,0:n_elements(smaxnew)-1]=smaxnew
-        snr=smaxnew*(pgrid/100d0)^.5d0
-        plot,pgrid,snr,/xl,ys=1
-        i0=where(snr eq max(snr))
-        print,idepth,iq,pgrid[i0[0]],smaxnew[i0[0]]
+        ngrid=n_elements(smaxnew)
+        sntot[0,idepth,iq,0:ngrid-1]=pgrid
+        sntot[1,idepth,iq,0:ngrid-1]=smaxnew
+        coeff=robust_poly_fit(alog10(pgrid),median(alog10(smaxnew),10),5)
+        chisq_rat=smaxnew/10.^poly(alog10(pgrid),coeff)
+        chisq_diff=smaxnew-10.^poly(alog10(pgrid),coeff)
+        sntot[2,idepth,iq,0:ngrid-1]=chisq_rat
+        sntot[3,idepth,iq,0:ngrid-1]=chisq_diff
+        !p.multi=[0,1,3]
+        i0=where(chisq_rat eq max(chisq_rat))
+        if(max(chisq_rat) gt chisq_rat_max and max(chisq_diff[i0]) gt chisq_diff_max) then begin
+            chisq_rat_max=max(chisq_rat)
+            chisq_diff_max=chisq_diff[i0[0]]
+            datamax=[idepth,depth[idepth],iq,tdur[iq],pgrid[i0[0]],smaxnew[i0[0]]]
+        endif
+        if(smaxnew[i0[0]] gt 40d0 and chisq_diff[i0[0]] gt 10d0) then begin
+          plot,pgrid,chisq_rat,/xl
+          print,idepth,depth[idepth],iq,tdur[iq],pgrid[i0[0]],smaxnew[i0[0]],chisq_rat[i0[0]],chisq_diff[i0[0]]
+          openw,1,'lightcurve.in'
+          printf,1,ncadence,f,q,long(tminnew[i0[0]]),long(tminnew[i0[0]]),flag
+          for i=0L,ncadence-1L do printf,1,timetotal[i],ftotal[i],sigma
+          close,1
+          spawn,'./test_qpt'
+          readcol,'transit_times.txt',ntt,format='l'
+          tt=timetotal[ntt]
+          ephem=poly_fit(dindgen(n_elements(ntt)),tt,1,/double)
+          print,ephem,tt,ftotal[ntt],stddev(tt-ephem[0]-ephem[1]*dindgen(n_elements(ntt))),stddev(ftotal(ntt))^2/mean(ftotal(ntt))
+;        c=get_kbrd(1)
+;          wait,.005
+          plot,time-tt[0],chisq_array[idepth,iq,*],xr=[-2,2],yr=[0,max(chisq_array[idepth,iq,*])]
+          for i=1,n_elements(ntt)-1 do oplot,time-tt[i],chisq_array[idepth,iq,*]
+;        c=get_kbrd(1)
+;        wait,.005
+          plot,time-tt[0],fsap/median(fsap[where(abs(time-tt[0]) lt 2d0)]),ys=1,xr=[-1,1],psym=6,symsize=0.25,thick=2,yr=[.999,1.001],tit='Depth= '+string(depth[idepth]*1d6,format='(f5.1)')+' ppm; Duration= '+string(tdur[iq]*24d0,format='(f5.1)')+' hr; f= '+string(f,format='(f6.3)')+'; t0= '+string(ephem[0],format='(f10.5)')+'; Period= '+string(ephem[1],format='(f10.5)')
+          for i=1,n_elements(ntt)-1 do begin
+            iin=where(abs(time-tt[i]) lt 2d0)
+            if(iin[0] ge 0) then oplot,time-tt[i],fsap/median(fsap[iin]),psym=6,symsize=0.25,thick=2
+          endfor
+        endif
+;        c=get_kbrd(1)
+;        wait,.005
+;        endif
       endfor
     endfor
-    save,time,fsap,f,sntot,pmin,pmax,depth,ndepth,tdur,ndur,filename='qats_depth_dur_'+kids+'.sav'
+    save,time,fsap,f,sntot,pmin,pmax,depth,ndepth,tdur,ndur,ephem,tt,datamax,filename='qats_depth_dur_'+kids+'.sav'
     spawn,'mv depth_distribution.sav depth_distribution_'+kids+'.sav'
+    device,/close
     print,'Finished'
     c=get_kbrd(1)
 ; Now, re-gzip these files:

@@ -15,6 +15,7 @@ pro fit_transit, $
 ; polynomial; this will be fed into QATS to search for planets.
 ; Remaining questions to figure out:  1) how do I pick a window?
 ; 2) how do I pick the polynomial order (AIC, BIC, F-test, etc)?
+; 3) how do I detect jumps that were not eliminated by the CBV?
 
 ;;1.  Set up internal variables
 @const
@@ -54,7 +55,7 @@ ssap=sig
 
 nt=n_elements(time)
 gap=where((shift(reform(time),-1)-reform(time)) gt 0.5d0)
-gap=[gap,1634,5158]
+;gap=[gap,1634,5158]
 gap=gap[sort(gap)]
 gap1=[0,gap+1]
 gap2=[gap,nt-1]
@@ -125,6 +126,7 @@ for iseg=0,nseg-1 do begin
           coeff0=poly_fit(ttmp,flux,ord,/double,measure_errors=ssap[indx],chisq=chi0,yfit=yfit0)
           coeff=poly_fit(ttmp,flux_model,ord,/double,measure_errors=ssap[indx],chisq=chi,yfit=yfit)
           if(idepth eq 0) then chisq_array[idepth,idur,itime]=chi else chisq_array[idepth,idur,itime]=chi0-chi
+;print,idepth,idur,itime,chisq_array[idepth,idur,itime]
           if(chi0-chi gt 20d0) then begin
 ;            plot,ttmp,flux,ys=1,ps=4
 ;            oplot,ttmp,poly(ttmp,coeff0),col=255
