@@ -40,9 +40,8 @@ ENDIF
 ;;=============================================================================
 ;;2.  Form text of SQL query script
 ;;=============================================================================
-;;text_line_1 = 'SELECT * FROM source where KEPLERID='+in_kepler_id
-;;text_line_1 = 'select * from source inner join object on (object.keplerid =source.keplerid and object.quarter = source.quarter) where (source.KEPLERID='+in_kepler_id+' and lcflag=1)'
-text_line_1 = 'select distinct SOURCEID,CADENCENO,TIME,SAP_FLUX,SAP_FLUX_ERR,PDCSAP_FLUX,PDCSAP_FLUX_ERR,CBVSAP_MODL,CBVSAP_FLUX,SAP_QUALITY,source.KEPLERID,source.QUARTER,LCFLAG,CHANNEL,SKYGROUP,MODULE,SEASON,OUTPUT,DATA_REL,RA_OBJ,DEC_OBJ,EQUINOX,PMRA,PMDEC,PMTOTAL,PARALLAX,GLON,GLAT,GMAG,RMAG,IMAG,ZMAG,D51MAG,JMAG,HMAG,KMAG,KEPMAG,GRCOLOR,JKCOLOR,GKCOLOR,TEFF,LOGG,FEH,EBMINUSV,AV,RADIUS,TMINDEX,BJDREFI from source inner join object on (object.keplerid =source.keplerid and object.quarter = source.quarter) where (source.KEPLERID='+in_kepler_id+' and lcflag=1)'
+;;text_line_1 = 'select distinct SOURCEID,CADENCENO,TIME,SAP_FLUX,SAP_FLUX_ERR,PDCSAP_FLUX,PDCSAP_FLUX_ERR,CBVSAP_MODL,CBVSAP_FLUX,SAP_QUALITY,source.KEPLERID,source.QUARTER,LCFLAG,CHANNEL,SKYGROUP,MODULE,SEASON,OUTPUT,DATA_REL,RA_OBJ,DEC_OBJ,EQUINOX,PMRA,PMDEC,PMTOTAL,PARALLAX,GLON,GLAT,GMAG,RMAG,IMAG,ZMAG,D51MAG,JMAG,HMAG,KMAG,KEPMAG,GRCOLOR,JKCOLOR,GKCOLOR,TEFF,LOGG,FEH,EBMINUSV,AV,RADIUS,TMINDEX,BJDREFI from source inner join object on (object.keplerid =source.keplerid and object.quarter = source.quarter) where (source.KEPLERID='+in_kepler_id+' and lcflag=1)'
+text_line_1 = 'select distinct SOURCEID,CADENCENO,TIME,SAP_FLUX,SAP_FLUX_ERR,PDCSAP_FLUX,PDCSAP_FLUX_ERR,SAP_QUALITY,source.KEPLERID,source.QUARTER,LCFLAG,CHANNEL,SKYGROUP,MODULE,SEASON,OUTPUT,DATA_REL,RA_OBJ,DEC_OBJ,EQUINOX,PMRA,PMDEC,PMTOTAL,PARALLAX,GLON,GLAT,GMAG,RMAG,IMAG,ZMAG,D51MAG,JMAG,HMAG,KMAG,KEPMAG,GRCOLOR,JKCOLOR,GKCOLOR,TEFF,LOGG,FEH,EBMINUSV,AV,RADIUS,TMINDEX,BJDREFI from source inner join object on (object.keplerid =source.keplerid and object.quarter = source.quarter) where (source.KEPLERID='+in_kepler_id+' and lcflag=1)'
 ;;=============================================================================
 ;;3.  Write text to file
 ;;=============================================================================
