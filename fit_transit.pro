@@ -8,7 +8,8 @@ pro fit_transit, $
                  db_flux=db_flux, $
                  db_err_flux=db_err_flux, $
                  db_quarter=db_quarter, $
-                 db_channel=db_channel
+                 db_channel=db_channel, $
+                 read_lightcurve_from_local_fitsfile=read_lightcurve_from_local_fitsfile
 ; 8/23/2012 This routine fits a transit light curve with a box-car
 ; transit shape of a specified depth (multiplied by a polynomial).  
 ; A delta-chi-square is computed relative to a fit with a single
@@ -20,7 +21,10 @@ pro fit_transit, $
 ;;1.  Set up internal variables
 @const
 ;;2.1  Reading data from fits files
-;@read_data
+if keyword_set(read_lightcurve_from_local_fitsfile) then begin
+@read_data
+time=time-55000d0
+endif else begin
 ;;2.2  Applying CBV's to SQL database light curves
 status=make_cbv_corrected_lightcurve( $
                                       time=db_time, $
@@ -32,7 +36,6 @@ status=make_cbv_corrected_lightcurve( $
                                       log_lun=log_lun $
                                     )
 ;;Compare CBV results
-;time=time-55000d0
 db_time=db_time-55000d0
 ;plot,time,fflat,color=-1,psym=3,charsize=2,xtitle='time',ytitle='cbvsap_flux',title='KID 1432214'
 ;oplot,db_time,db_flux/median(db_flux),color=255,psym=3
@@ -41,12 +44,19 @@ db_time=db_time-55000d0
 time=db_time
 fflat=db_flux
 sig=db_err_flux
+endelse
+
+;Verify the light curve to be fit looks good by eye
+set_plot,'X'
+plot,time,fflat,psym=3,title='Corrected light curve to be fit.',ystyle=1
+wait,1
 ;;Resume Eric's unmodified code
 t0=t0-55000d0
 ; Baseline 'window' before & after transit for fitting polynomial:
 window=1d0
 ; Range of depths of the transit to search over:
-depth=[0d0,3.2d-5,4d-5,5d-5,6.4d-5,8d-5,.000100,.000128,.000160,.000200,.000256,.000320,.000400,.000512,.000640,.000800,.001000]
+;depth=[0d0,3.2d-5,4d-5,5d-5,6.4d-5,8d-5,.000100,.000128,.000160,.000200,.000256,.000320,.000400,.000512,.000640,.000800,.001000]
+depth=[0d0,.000100,.001]
 tdur=[1d0,1.25,1.5,1.75,2d0,2.5,3d0,3.5,4d0,4.5d0,5d0,5.5d0,6d0,6.5,7d0,7.5,8d0,8.5,9d0,9.5,10d0]/24d0
 ndepth=n_elements(depth)
 ndur=n_elements(tdur)
@@ -55,7 +65,10 @@ ssap=sig
 
 nt=n_elements(time)
 gap=where((shift(reform(time),-1)-reform(time)) gt 0.5d0)
+;stop
 ;gap=[gap,1634,5158]
+;gap=[gap,1635,5530,41460]
+;gap=[gap,10]
 gap=gap[sort(gap)]
 gap1=[0,gap+1]
 gap2=[gap,nt-1]
@@ -106,9 +119,13 @@ mask= mask and (abs(fsap-median(fsap,20)) lt 5d-4)
 chisq_array=dblarr(ndepth,ndur,nt)
 size_array=intarr(ndur,nt)
 ord=2
-for iseg=0,nseg-1 do begin
+for iseg=1,nseg-1 do begin
+print,'******DEBUG:  starting at segment 1 instead of segment 0 for step fit testing******'
+print,'******Restore to starting at segment 0 when done******'
+;for iseg=0,nseg-1 do begin
   i1=gap1[iseg] & i2=gap2[iseg]  
   for itime=i1,i2 do begin
+;;print,iseg,itime
     for idur=0,ndur-1 do begin
       indx=i1+where((time[i1:i2]-time[itime]-tdur[idur]) lt window and $
             (time[i1:i2]-time[itime]) gt -window and (mask[i1:i2] eq 1))
@@ -119,20 +136,63 @@ for iseg=0,nseg-1 do begin
         ttmp=time[indx]-time[itime]
         ntmp=double(n_elements(indx))
         size_array[idur,itime]=ntmp
+        ;;Do best-fit for polynomial alone for this window.  Ideally,
+        ;;it would be outside the duration loop, but the duration loop
+        ;;looks like it has side effects on the window of data to fit
+        ;;to.
+        flux=fsap[indx]
+        coeff0=poly_fit(ttmp,flux,ord,/double,measure_errors=ssap[indx],chisq=chi0,yfit=yfit0)
+        ;;Do best-fit for polynomial multiplier and depth/height of
+        ;;step.  Ideally, it would be outside the duration loop, but
+        ;;the duration loop looks like it has side effects on the
+        ;;window of data to fit to.
+        ;;;;Figure out which index in the temporary time array
+        ;;;;corresponds to the current loop itime
+        ;;;dummy=min(abs(ttmp),indx_itime)
+        status=calc_stepfit(data_x=double(ttmp),data_y=double(fsap[indx]),measure_errors=double(ssap[indx]),poly_order=ord,chisq=chi_stepfit,yfit=yfit_stepfit)
+;        plot,ttmp,flux,psym=4,/ys
+;        oplot,ttmp,yfit_stepfit,psym=5
+;        legend,string(chi_stepfit)
+;stop
+        ;;coeff_fermi=[median(ttmp),0.1,0.001,1.000]
+        ;;yfit_fermi=mpcurvefit(ttmp,fsap[indx],1/ssap[indx]^2,coeff_fermi,function_name='calc_fermi_func',/nocatch,/autoderivative,/quiet)
+        ;;Recalculate the chisq for the step fit, based on this
+        ;;particular window
+        ;;chi_fermi=total(((yfit_fermi-fsap[indx])/ssap[indx])^2)
         for idepth=0,ndepth-1 do begin
           model=1d0-depth[idepth]*((time[indx] ge time[itime]) and (time[indx] le (time[itime]+tdur[idur])))
           flux_model=fsap[indx]/model
-          flux=fsap[indx]
-          coeff0=poly_fit(ttmp,flux,ord,/double,measure_errors=ssap[indx],chisq=chi0,yfit=yfit0)
           coeff=poly_fit(ttmp,flux_model,ord,/double,measure_errors=ssap[indx],chisq=chi,yfit=yfit)
-          if(idepth eq 0) then chisq_array[idepth,idur,itime]=chi else chisq_array[idepth,idur,itime]=chi0-chi
+          if(idepth eq 0) then begin
+              chisq_array[idepth,idur,itime]=chi 
+          endif else begin
+              value_best_chi=min([chi,chi_stepfit],index_best_chi)
+              if index_best_chi eq 0 then begin
+                   chisq_array[idepth,idur,itime]=chi0-chi
+              endif else begin
+              ;;Want case where Fermi func. gives better fit (lower
+              ;;chisq) to yield neg. value in chisq_array:
+                   chisq_array[idepth,idur,itime]=chi_stepfit-chi
+              endelse
+          endelse
 ;print,idepth,idur,itime,chisq_array[idepth,idur,itime]
+;+Debug plotting
           if(chi0-chi gt 20d0) then begin
-;            plot,ttmp,flux,ys=1,ps=4
-;            oplot,ttmp,poly(ttmp,coeff0),col=255
-;           oplot,ttmp,poly(ttmp,coeff)*model,col=255L*256L
-;           char=get_kbrd(1)
+              !p.multi=[0,1,2]
+              time_for_plot=time[indx]
+              plot,[time_for_plot,time_for_plot,time_for_plot],[flux,poly(ttmp,coeff0),poly(ttmp,coeff)*model],ys=1,/nodata,charsize=2
+              ;;annotstr=['chi_poly:'+string(chi0),'chi_polypulse:'+string(chi),'chi_fermi:'+string(chi_fermi)]
+              ;;legend,annotstr
+              oplot,time_for_plot,flux,psym=4
+              oplot,time_for_plot,poly(ttmp,coeff0),col=255
+              oplot,time_for_plot,poly(ttmp,coeff)*model,col=255L*256L
+              oplot,time_for_plot,yfit_stepfit,col=255L*256L*256L
+              plot,indx,flux,psym=3,ystyle=1,charsize=2
+              wait,0.01
+              ;stop
+              ;;char=get_kbrd(1)
           endif
+;-
         endfor
       endif
     endfor
