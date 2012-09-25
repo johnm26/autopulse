@@ -75,7 +75,7 @@ window=1d0
 ;;3.2 Range of depths of the transit to search over:
 ;;=============================================================================
 ;depth=[0d0,3.2d-5,4d-5,5d-5,6.4d-5,8d-5,.000100,.000128,.000160,.000200,.000256,.000320,.000400,.000512,.000640,.000800,.001000]
-depth=[0d0,.000100,.001]
+depth=[0d0,.001,.024]
 tdur=[1d0,1.25,1.5,1.75,2d0,2.5,3d0,3.5,4d0,4.5d0,5d0,5.5d0,6d0,6.5,7d0,7.5,8d0,8.5,9d0,9.5,10d0]/24d0
 ndepth=n_elements(depth)
 ndur=n_elements(tdur)
@@ -135,7 +135,16 @@ for ibad=0,nbad-1 do begin
     mask=mask or (time gt bad_start[ibad] and time lt bad_end[ibad])
 endfor
 mask=mask eq 0
-mask= mask and (abs(fsap-median(fsap,20)) lt 5d-4)
+;outlier_threshold=5d-4
+outlier_threshold=1.0
+if max(depth) gt outlier_threshold then begin
+    err_msg = SYSTIME(/UTC) + "|ERROR|FIT_TRANSIT|One or more of the pulse depths to be tested exceeded the absolute outlier rejection threshold.  Iterating over the depths in excess of the threshold will cause unstable chisq results.  Please either increase the outlier_threshold or limit the depth array to smaller depths before proceeding."
+    PRINT, err_msg
+    ;;PRINTF, log_lun, err_msg
+    SAVE, FILENAME='error_FIT_TRANSIT.sav', /ALL
+    stop
+endif
+mask= mask and (abs(fsap-median(fsap,20)) lt outlier_threshold)
 
 ;char=get_kbrd(1)
 
@@ -155,29 +164,46 @@ ord=2
 ;;=============================================================================
 ;;6.2  Commence the loop over segments:
 ;;=============================================================================
-;for iseg=1,nseg-1 do begin
+;for iseg=16,nseg-1 do begin
 ;    print,'******DEBUG:  starting at segment 1 instead of segment 0 for step fit testing******'
 ;    print,'******Restore to starting at segment 0 when done******'
 for iseg=0,nseg-1 do begin
     i1=gap1[iseg] & i2=gap2[iseg]
+;stop
 ;;=============================================================================
 ;;6.2.1  Commence the loop over window position within the segment
 ;;=============================================================================
     for itime=i1,i2 do begin
-        print,iseg,itime
+;    for itime=i1,i2 do begin
+;        print,iseg,itime
 ;;=============================================================================
 ;;6.2.1.1  For the maximum possible size of the window at this
-;;position, do a polynomial+step fit (this fit takes a long time,
-;;which is why we are going to do it outside the pulse duration loop,
-;;which uses a more tailored window).
+;;position, do a polynomial+step fit.  This fit takes a long time
+;;compared to a plain polynomial fit, which is why we are going to do
+;;it outside the pulse duration loop, which uses a more tailored
+;;window.  Because the fit will be done at the maximum window size, we
+;;will have to offset the fit result later to match each more tailored
+;;window (this means recalculating the chi-squared in the new window).
 ;;=============================================================================
-;        indx=i1+where((time[i1:i2]-time[itime]-max(tdur)) lt window and $
-;                      (time[i1:i2]-time[itime]) gt -window and (mask[i1:i2] eq 1))
-        
+        indx_maxwindow=i1+where((time[i1:i2]-time[itime]-max(tdur)) lt window and $
+                                (time[i1:i2]-time[itime]) gt -window and (mask[i1:i2] eq 1))
+        iout=i1+where(((((time[i1:i2]-time[itime]-max(tdur)) lt window) and ((time[i1:i2]-time[itime]-max(tdur) gt 0d0))) or $
+                       (((time[i1:i2]-time[itime]) gt -window) and ((time[i1:i2]-time[itime]) lt 0d0))) and (mask[i1:i2] eq 1))
+        iin=where((time[indx_maxwindow] ge time[itime]) and (time[indx_maxwindow] le (time[itime]+max(tdur))))
+        if(n_elements(iout) gt ord+2 and n_elements(iin) ge 1) then begin
+            ttmp_maxwindow=time[indx_maxwindow]-time[itime]
+            ntmp_maxwindow=double(n_elements(indx_maxwindow))
+            ;;Do best fit for polynomial multiplier and depth/height of
+            ;;step.
+            status=calc_stepfit(data_x=double(ttmp_maxwindow),data_y=double(fsap[indx_maxwindow]),measure_errors=double(ssap[indx_maxwindow]),poly_order=ord,chisq=chi_stepfit_maxwindow,yfit=yfit_stepfit_maxwindow)
+        endif
 ;;=============================================================================
 ;;6.2.1.2  Commence the loops over pulse durations and depths
 ;;=============================================================================
         for idur=0,ndur-1 do begin
+;;=============================================================================
+;;6.2.1.2.1 Define a data window matching this pulse duration
+;;=============================================================================
             indx=i1+where((time[i1:i2]-time[itime]-tdur[idur]) lt window and $
                           (time[i1:i2]-time[itime]) gt -window and (mask[i1:i2] eq 1))
             iout=i1+where(((((time[i1:i2]-time[itime]-tdur[idur]) lt window) and ((time[i1:i2]-time[itime]-tdur[idur] gt 0d0))) or $
@@ -187,18 +213,32 @@ for iseg=0,nseg-1 do begin
                 ttmp=time[indx]-time[itime]
                 ntmp=double(n_elements(indx))
                 size_array[idur,itime]=ntmp
-                ;;Do best fit for polynomial alone for this window.  Ideally,
-                ;;it would be outside the duration loop, but the duration loop
-                ;;looks like it has side effects on the window of data to fit
-                ;;to.
+;;=============================================================================
+;;6.2.1.2.2  Do best fit for polynomial alone for this window.
+;;Ideally, it would be outside the duration loop, but the duration
+;;loop looks like it has side effects on the window of data to fit to.
+;;=============================================================================
                 flux=fsap[indx]
                 coeff0=poly_fit(ttmp,flux,ord,/double,measure_errors=ssap[indx],chisq=chi0,yfit=yfit0)
-                ;;Do best fit for polynomial multiplier and depth/height of
-                ;;step.  Ideally, it would be outside the duration loop, but
-                ;;the duration loop looks like it has side effects on the
-                ;;window of data to fit to.
-                status=calc_stepfit(data_x=double(ttmp),data_y=double(fsap[indx]),measure_errors=double(ssap[indx]),poly_order=ord,chisq=chi_stepfit,yfit=yfit_stepfit)
-                ;;Do best fit over depths for transit pulse
+;;=============================================================================
+;;6.2.1.2.2.1 Recalculate the chi-squared for the polynomial+step fit, when confined to this window
+;;=============================================================================
+;;6.2.1.2.2.1.1 Find where indx appears in indx_maxwindow:
+                match2,indx,indx_maxwindow,indx_sub,indx_maxwindow_sub
+                indx_match_success=where(indx_sub ne -1,count_match_success)
+                if count_match_success ne n_elements(indx) then begin
+                    err_msg = SYSTIME(/UTC) + "|ERROR|FIT_TRANSIT|count_match_success is not equal to the number of elements in indx."
+                    PRINT, err_msg
+                    ;;PRINTF, log_lun, err_msg
+                    SAVE, FILENAME='error_FIT_TRANSIT.sav', /ALL
+                    stop
+                endif
+;;6.2.1.2.2.1.2 Calculate the chi-squared:
+                yfit_stepfit=yfit_stepfit_maxwindow[indx_sub]
+                chi_stepfit=total( ((yfit_stepfit-flux)/ssap[indx])^2 )
+;;=============================================================================
+;;6.2.1.2.3 Commence loop over pulse depth and do best fit over depths for transit pulse
+;;=============================================================================
                 for idepth=0,ndepth-1 do begin
                     model=1d0-depth[idepth]*((time[indx] ge time[itime]) and (time[indx] le (time[itime]+tdur[idur])))
                     flux_model=fsap[indx]/model
@@ -239,7 +279,7 @@ for iseg=0,nseg-1 do begin
                         oplot,time_for_plot,yfit_stepfit,col=255L*256L*256L
                         plot,indx,flux,psym=3,ystyle=1,charsize=2
                         wait,0.01
-                                ;stop
+                        ;;stop
                         ;;char=get_kbrd(1)
                     endif
 ;-
@@ -254,7 +294,21 @@ for iseg=0,nseg-1 do begin
         for idepth=1,ndepth-1 do chisq_array[idepth,idur,i1:i2]= chisq_array[idepth,idur,i1:i2]/median(resid)^2
     endfor
 endfor
-save,chisq_array,depth,ndepth,tdur,ndur,size_array,time,fsap,ssap,mask,filename='depth_distribution.sav'
+save, $
+  chisq_array, $
+  chisq_array_poly, $
+  chisq_array_polypulse, $
+  chisq_array_polystep, $
+  depth, $
+  ndepth, $
+  tdur, $
+  ndur, $
+  size_array, $
+  time, $
+  fsap, $
+  ssap, $
+  mask, $
+  filename='depth_distribution.sav'
 ;save,/all,filename='depth_distribution'+kid+'.sav'
 return
 end
