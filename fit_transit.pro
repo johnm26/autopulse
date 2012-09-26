@@ -9,7 +9,8 @@ pro fit_transit, $
                  db_err_flux=db_err_flux, $
                  db_quarter=db_quarter, $
                  db_channel=db_channel, $
-                 read_lightcurve_from_local_fitsfile=read_lightcurve_from_local_fitsfile
+                 do_make_planetmask=do_make_planetmask, $
+                 do_read_lightcurve_from_local_fitsfile=do_read_lightcurve_from_local_fitsfile
 ; 8/23/2012 This routine fits a transit light curve with a box-car
 ; transit shape of a specified depth (multiplied by a polynomial).  
 ; A delta-chi-square is computed relative to a fit with a single
@@ -25,7 +26,7 @@ pro fit_transit, $
 ;;=============================================================================
 ;;2.1  Reading data from fits files
 ;;=============================================================================
-if keyword_set(read_lightcurve_from_local_fitsfile) then begin
+if keyword_set(do_read_lightcurve_from_local_fitsfile) then begin
 @read_data
     time=time-55000d0
 endif else begin
@@ -74,8 +75,8 @@ window=1d0
 ;;=============================================================================
 ;;3.2 Range of depths of the transit to search over:
 ;;=============================================================================
-;depth=[0d0,3.2d-5,4d-5,5d-5,6.4d-5,8d-5,.000100,.000128,.000160,.000200,.000256,.000320,.000400,.000512,.000640,.000800,.001000]
-depth=[0d0,.001,.024]
+depth=[0d0,3.2d-5,4d-5,5d-5,6.4d-5,8d-5,.000100,.000128,.000160,.000200,.000256,.000320,.000400,.000512,.000640,.000800,.001000,.01,.024]
+;depth=[0d0,.001,.024]
 tdur=[1d0,1.25,1.5,1.75,2d0,2.5,3d0,3.5,4d0,4.5d0,5d0,5.5d0,6d0,6.5,7d0,7.5,8d0,8.5,9d0,9.5,10d0]/24d0
 ndepth=n_elements(depth)
 ndur=n_elements(tdur)
@@ -99,42 +100,60 @@ nseg=n_elements(gap1)
 ;;=============================================================================
 ;restore,'koi701_01_05_model.sav'
 ;fsap = fsap / modtot
-
-goto,skipmaskplanet
-n0=floor((min(time)-t0)/period)
-ntrans=ceil((max(time)-min(time))/period)+1
-nplanet=n_elements(period)
-print,'Number of planets: ',nplanet
-mask_planet=bytarr(nplanet,n_elements(time))
-for ip=0,nplanet-1 do begin
-    if(period[ip] gt 0d0) then begin
-        nnp=n0[ip]+dindgen(ntrans[ip])
-        ttp=t0[ip]+period[ip]*nnp+pdot[ip]*nnp^2
-        for it=0,ntrans[ip]-1 do mask_planet[ip,*]=(mask_planet[ip,*] or abs(time-ttp[it]) lt 1.1d0*td[ip])
-;    plot,((time-t0[ip]+period[ip]/2d0) mod period[ip])+period[ip]/2d0,fflat/median(fflat,100),ys=1,ps=3,yr=[.998,1.002],col=256L^3-1L
-;    oplot,((time-t0[ip]+period[ip]/2d0) mod period[ip])+period[ip]/2d0,fflat/median(fflat,100)*(mask_planet[ip,*] eq 0),col=255,ps=3
+if keyword_set(do_make_planetmask) then begin
+    print,systime()+'|FIT_TRANSIT|Making planet mask'
+    n0=floor((min(time)-t0)/period)
+    ntrans=ceil((max(time)-min(time))/period)+1
+    nplanet=n_elements(period)
+;stop
+nplanet=1
+print,'***DEBUG:  Attempt to mask the first planet but leave the second.  Alter both the mask array and the loop for this.  Restore afterwards.'
+    print,'Number of planets: ',nplanet
+    mask_planet=bytarr(nplanet,n_elements(time))
+    for ip=0,nplanet-1 do begin
+        if(period[ip] gt 0d0) then begin
+            nnp=n0[ip]+dindgen(ntrans[ip])
+            ttp=t0[ip]+period[ip]*nnp+pdot[ip]*nnp^2
+            for it=0,ntrans[ip]-1 do mask_planet[ip,*]=(mask_planet[ip,*] or abs(time-ttp[it]) lt 1.1d0*td[ip])
+            plot,((time-t0[ip]+period[ip]/2d0) mod period[ip])+period[ip]/2d0,fflat/median(fflat,100),ys=1,ps=3,yr=[.998,1.002],col=-1,title='Planet masking'
+            oplot,((time-t0[ip]+period[ip]/2d0) mod period[ip])+period[ip]/2d0,fflat/median(fflat,100)*(mask_planet[ip,*] eq 0),col=255*256L,ps=3
+            legend,['retained','masked'],color=[255*256L,-1]
+            wait,1
 ;    char=get_kbrd(1)
-    endif else begin
-        mask_planet[ip,*]=0
-    endelse
-endfor
-skipmaskplanet:
+        endif else begin
+            mask_planet[ip,*]=0
+        endelse
+    endfor
+endif
 
 ;;=============================================================================
 ;;5.  Flag & remove outliers:
 ;;=============================================================================
-
-; Read in bad points from data file:
+;;5.1 Initialize mask:
+mask=bytarr(n_elements(time))
+;;5.2 Exclude known bad sections
+;;5.2.1 Read in known bad points from data file:
 readcol,'bad_regions.txt',bad_start,bad_end,format='f,f'
 nbad=n_elements(bad_start)
-mask=bytarr(n_elements(time))
 for ibad=0,nbad-1 do begin
-;  for ip=0,nplanet-1 do begin
-;    mask_planet[ip,*]=mask_planet[ip,*] or (time gt bad_start[ibad] and time lt bad_end[ibad])
-;  endfor
-    mask=mask or (time gt bad_start[ibad] and time lt bad_end[ibad])
+;    if keyword_set(do_make_planetmask) then begin
+;        for ip=0,nplanet-1 do begin
+;            mask_planet[ip,*]=mask_planet[ip,*] or (time gt bad_start[ibad] and time lt bad_end[ibad])
+;        endfor
+;    endif else begin
+        mask=mask or (time gt bad_start[ibad] and time lt bad_end[ibad])
+;    endelse
 endfor
+;;5.2.2 Invert 0's into 1's and vice versa:
 mask=mask eq 0
+;;5.3 Mask out known planet transits, if desired
+if keyword_set(do_make_planetmask) then begin
+    mask_planet=mask_planet eq 0
+    for ip=0,nplanet-1 do begin
+        mask=mask*reform(mask_planet[ip,*])
+    endfor
+endif
+;;5.4 Mask outliers beyond outlier_threshold of the median
 ;outlier_threshold=5d-4
 outlier_threshold=1.0
 if max(depth) gt outlier_threshold then begin

@@ -3,7 +3,8 @@
 ;; @example:  IDL>  compute_qats,1432214,0.01,[1.0,300.0]
 pro compute_qats,kid0,f,prange
 ;1.  Set up internal variables
-read_lightcurve_from_local_fitsfile=1
+do_read_lightcurve_from_local_fitsfile=1
+do_make_planetmask=1
 sql_macro_tmpfile_name='tmpMacroMySQL.sql'
 sql_queryresult_tmpfile_name='tmpResultMySQL.tab'
 q=0
@@ -42,7 +43,7 @@ for ikid=0,nkid-1 do begin
           /allow_nonexistent
 ;2.3 By default, read from Kepler SQL database (but don't do it if the
 ;local reading keyword is set)
-        if ~keyword_set(read_lightcurve_from_local_fitsfile) then begin
+        if ~keyword_set(do_read_lightcurve_from_local_fitsfile) then begin
 ;2.3.1 Form the SQL query
             status=make_sql_query_macro( $
                                          in_kepler_id=kids, $
@@ -116,7 +117,8 @@ for ikid=0,nkid-1 do begin
               db_err_flux=err_flux, $
               db_channel=channel, $
               db_quarter=quarter, $
-              read_lightcurve_from_local_fitsfile=1
+              do_make_planetmask=do_make_planetmask, $
+              do_read_lightcurve_from_local_fitsfile=do_read_lightcurve_from_local_fitsfile
         endif
 
         restore,'depth_distribution.sav'
