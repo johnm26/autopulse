@@ -106,9 +106,9 @@ if keyword_set(do_make_planetmask) then begin
     ntrans=ceil((max(time)-min(time))/period)+1
     nplanet=n_elements(period)
 ;stop
-nplanet=1
-print,'***DEBUG:  Attempt to mask the first planet but leave the second.  Alter both the mask array and the loop for this.  Restore afterwards.'
-    print,'Number of planets: ',nplanet
+;nplanet=1
+;print,'***DEBUG:  Attempt to mask the first planet but leave the second.  Alter both the mask array and the loop for this.  Restore afterwards.'
+    print,'Number of planets to be masked: ',nplanet
     mask_planet=bytarr(nplanet,n_elements(time))
     for ip=0,nplanet-1 do begin
         if(period[ip] gt 0d0) then begin
