@@ -1,9 +1,9 @@
 pro fit_transit, $
                  kid, $
-                 t0, $
-                 period, $
-                 pdot, $
-                 td, $
+                 t0=t0, $
+                 period=period, $
+                 pdot=pdot, $
+                 tdur=tdur, $
                  db_time=db_time, $
                  db_flux=db_flux, $
                  db_err_flux=db_err_flux, $
@@ -54,10 +54,51 @@ endif else begin
 endelse
 
 ;;=============================================================================
-;; Plot to verify the corrected light curve to be fit looks good by eye
+;;2.3 Plot to verify that the corrected light curve to be fit looks good by eye
 ;;=============================================================================
 set_plot,'X'
 plot,time,fflat,psym=3,title='Corrected light curve to be fit.',ystyle=1
+wait,1
+;;=============================================================================
+;;2.4 Visualize the FFT of the light curve
+;;=============================================================================
+;;=============================================================================
+;;2.4.1 Pick the longest non-gappy segment of light curve available
+;;=============================================================================
+time_interval_matching_threshold=0.00001 ;;allowed slop in days for exposures to count as normal
+time_interval=time[1:n_elements(time)-1]-time[0:n_elements(time)-2]
+median_time_interval=median(time_interval)
+index_time_interval_gaps=where(abs(time_interval-median_time_interval) gt time_interval_matching_threshold,count_time_interval_gaps)
+uninterrupted_length_between_gaps=index_time_interval_gaps[1:n_elements(index_time_interval_gaps)-1]-index_time_interval_gaps[0:n_elements(index_time_interval_gaps)-2]
+;max_uninterrupted_length_between_gaps=max(uninterrupted_length_between_gaps,index_max_uninterrupted_length_between_gaps)
+max_uninterrupted_length_between_gaps=max(uninterrupted_length_between_gaps,index_max_uninterrupted_length_between_gaps)
+index_start_nogap_region=index_time_interval_gaps[index_max_uninterrupted_length_between_gaps]+1
+index_end_nogap_region=index_time_interval_gaps[index_max_uninterrupted_length_between_gaps+1]-1
+time_nogap_region=time[index_start_nogap_region:index_end_nogap_region]
+fflat_nogap_region=fflat[index_start_nogap_region:index_end_nogap_region]
+;;=============================================================================
+;;2.4.2 Run the FFT on the non-gappy data
+;;=============================================================================
+npoints=n_elements(time_nogap_region)
+delta=median( shift(reform(time_nogap_region),-1)-reform(time_nogap_region) )
+;t=time
+;;g_t_anal=fflat_nogap_region
+;;print,'***DEBUG:  inserting a fake sine signal to see if the FFT picks it up cleanly'
+g_t_anal=fflat_nogap_region ;;*sin(4.*!DPI*time_nogap_region)
+;;2.4.2.1 Use a sigma clip to filter out any transits...
+;;sigma_g_t_anal=robust_sigma(g_t_anal)
+;;
+u=lindgen(npoints)
+f=(((u+npoints/2) mod npoints) -(npoints/2))/(delta*npoints)
+g_f_fft=npoints*delta*fft(g_t_anal)
+!p.multi=[0,1,2]
+plot,time_nogap_region,g_t_anal,/ys,xtitle='Time (d)',ytitle='Relative flux'
+index_positive_frequency = where(f ge 0)
+plot,f[index_positive_frequency],abs(g_f_fft[index_positive_frequency]),psym=-4,xtitle='freq (cycles/day)',ytitle='power',title='power spectrum',xrange=[0,max(f)],/xs,/ylog
+!p.multi=[0,1,1]
+;om=(((u+npoints/2) mod npoints) -(npoints/2))/(delta*npoints)
+;scargle,t,g_t_anal,om,px
+;stop
 wait,1
 ;;=============================================================================
 ;;Resume Eric's unmodified code
@@ -65,7 +106,6 @@ wait,1
 ;;=============================================================================
 ;;3. Set up internal variables
 ;;=============================================================================
-t0=t0-55000d0
 fsap=fflat
 ssap=sig
 ;;=============================================================================
@@ -102,6 +142,7 @@ nseg=n_elements(gap1)
 ;fsap = fsap / modtot
 if keyword_set(do_make_planetmask) then begin
     print,systime()+'|FIT_TRANSIT|Making planet mask'
+    t0=t0-55000d0
     n0=floor((min(time)-t0)/period)
     ntrans=ceil((max(time)-min(time))/period)+1
     nplanet=n_elements(period)

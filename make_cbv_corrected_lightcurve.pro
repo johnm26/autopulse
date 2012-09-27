@@ -48,7 +48,7 @@ n_quarters=n_elements(uniq_quarters)
 ;;=============================================================================
 for i=0L,n_quarters-1 do begin
 ;;3.1  Set up indices into arrays for this quarter
-    ;print,uniq_quarters[i]
+                                ;print,uniq_quarters[i]
 ;;3.1.1  Get indices that match this quarter (=uniq_quarters[i])
     index_this_quarter=where(quarter eq uniq_quarters[i])
 ;;3.1.2  Figure out which channel was used this quarter
@@ -62,44 +62,52 @@ for i=0L,n_quarters-1 do begin
     endif
 ;;3.1.3  Read in the CBV for this quarter and channel
     cbv_read,uniq_quarters[i],uniq_channels[0],cbv
+    if size(cbv,/type) ne 8 then begin
+        err_msg = SYSTIME(/UTC) + "|WARN|make_cbv_corrected_lightcurve|No CBV data was available for quarter="+string(uniq_quarters[i])+", channel="+string(uniq_channels[0])+", so we are excluding this segment of light curve."
+        PRINT, err_msg
+        PRINTF, log_lun, err_msg
+        ;;SAVE, FILENAME='error_make_sql_query_macro.sav', /ALL
+        ;;RETURN, err_msg
+    endif else begin
 ;;3.1.4  Extract the light curve values for this quarter
-    time_quarter_i=time[index_this_quarter]
-    flux_quarter_i=flux[index_this_quarter]
-    err_flux_quarter_i=err_flux[index_this_quarter]
+        time_quarter_i=time[index_this_quarter]
+        flux_quarter_i=flux[index_this_quarter]
+        err_flux_quarter_i=err_flux[index_this_quarter]
 ;;3.2  Normalize this quarter's flux to 1.0 using the median flux
-    normalized_flux_quarter_i=flux_quarter_i/median(flux_quarter_i)
-    index_nan_err_flux=where(finite(err_flux_quarter_i) eq 0, count_nan_err_flux, complement=index_finite_err_flux)
-    if count_nan_err_flux gt 0 then err_flux_quarter_i[index_nan_err_flux] = median(err_flux_quarter_i[index_finite_err_flux])
-    normalized_err_flux_quarter_i=err_flux_quarter_i/median(flux_quarter_i)
+        normalized_flux_quarter_i=flux_quarter_i/median(flux_quarter_i)
+        index_nan_err_flux=where(finite(err_flux_quarter_i) eq 0, count_nan_err_flux, complement=index_finite_err_flux)
+        if count_nan_err_flux gt 0 then err_flux_quarter_i[index_nan_err_flux] = median(err_flux_quarter_i[index_finite_err_flux])
+        normalized_err_flux_quarter_i=err_flux_quarter_i/median(flux_quarter_i)
 ;;3.3  Concatenate each quarter's values together
 ;;3.3.1  Initialize the concatenation with the first available quarter
-    if i eq 0 then begin
-        time_concat=time_quarter_i
-        normalized_flux_concat=normalized_flux_quarter_i
-        normalized_err_flux_concat=normalized_err_flux_quarter_i
-        vec1=cbv.vector_1
-        vec2=cbv.vector_2
-        vec3=cbv.vector_3
-        vec4=cbv.vector_4
-        vec5=cbv.vector_5
-        vec6=cbv.vector_6
-        vec7=cbv.vector_7
-        vec8=cbv.vector_8
-        qtr=quarter[index_this_quarter]
+        if i eq 0 then begin
+            time_concat=time_quarter_i
+            normalized_flux_concat=normalized_flux_quarter_i
+            normalized_err_flux_concat=normalized_err_flux_quarter_i
+            vec1=cbv.vector_1
+            vec2=cbv.vector_2
+            vec3=cbv.vector_3
+            vec4=cbv.vector_4
+            vec5=cbv.vector_5
+            vec6=cbv.vector_6
+            vec7=cbv.vector_7
+            vec8=cbv.vector_8
+            qtr=quarter[index_this_quarter]
 ;;3.3.2  Continue the concatenation by joining on to the previous quarters
-    endif else begin
-        time_concat=[time_concat,time_quarter_i]
-        normalized_flux_concat=[normalized_flux_concat,normalized_flux_quarter_i]
-        normalized_err_flux_concat=[normalized_err_flux_concat,normalized_err_flux_quarter_i]
-        vec1=[vec1,cbv.vector_1]
-        vec2=[vec2,cbv.vector_2]
-        vec3=[vec3,cbv.vector_3]
-        vec4=[vec4,cbv.vector_4]
-        vec5=[vec5,cbv.vector_5]
-        vec6=[vec6,cbv.vector_6]
-        vec7=[vec7,cbv.vector_7]
-        vec8=[vec8,cbv.vector_8]
-        qtr=[qtr,quarter[index_this_quarter]]
+        endif else begin
+            time_concat=[time_concat,time_quarter_i]
+            normalized_flux_concat=[normalized_flux_concat,normalized_flux_quarter_i]
+            normalized_err_flux_concat=[normalized_err_flux_concat,normalized_err_flux_quarter_i]
+            vec1=[vec1,cbv.vector_1]
+            vec2=[vec2,cbv.vector_2]
+            vec3=[vec3,cbv.vector_3]
+            vec4=[vec4,cbv.vector_4]
+            vec5=[vec5,cbv.vector_5]
+            vec6=[vec6,cbv.vector_6]
+            vec7=[vec7,cbv.vector_7]
+            vec8=[vec8,cbv.vector_8]
+            qtr=[qtr,quarter[index_this_quarter]]
+        endelse
     endelse
 endfor
 ;;=============================================================================

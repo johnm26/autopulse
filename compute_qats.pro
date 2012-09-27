@@ -3,8 +3,8 @@
 ;; @example:  IDL>  compute_qats,1432214,0.01,[1.0,300.0]
 pro compute_qats,kid0,f,prange
 ;1.  Set up internal variables
-do_read_lightcurve_from_local_fitsfile=1
-do_make_planetmask=1
+do_read_lightcurve_from_local_fitsfile_orig=0
+do_make_planetmask_master_orig=1
 sql_macro_tmpfile_name='tmpMacroMySQL.sql'
 sql_queryresult_tmpfile_name='tmpResultMySQL.tab'
 q=0
@@ -25,6 +25,7 @@ for ikid=0,nkid-1 do begin
     print,'Working on KID: ',kids
     indx=where(long(kid0[ikid]) eq long(kid))
     if(indx[0] ge 0) then begin
+        print,'KID found within saved ephemerides ',kid0[ikid],indx
         nplanet=n_elements(indx)
 ; Identify all of the fits files associated with this KID:
 ;    spawn,'ls *'+kids+'*gz > fits_gz_list.txt'
@@ -32,9 +33,21 @@ for ikid=0,nkid-1 do begin
 ; gunzip the files:
 ;    for i=0,n_elements(fnamegz)-1 do spawn,'gunzip '+fnamegz[i]
         spawn,'ls DATA/*'+kids+'*fits > fits_list.txt'
-; Run the qats algorithm:
         pdot=dblarr(nplanet)
         print,'Removing: ',KOI[indx],t0[indx],period[indx],tdur[indx]
+        t0_curr=t0[indx]+54900d0
+        period_curr=period[indx]
+        pdot_curr=pdot
+        tdur_curr=tdur[indx]/24d0
+        do_read_lightcurve_from_local_fitsfile=do_read_lightcurve_from_local_fitsfile_orig
+        do_make_planetmask=do_make_planetmask_master_orig
+    endif else begin
+        print,'Ephemeris file did not contain KID ',kid0[ikid],indx
+        print,'Therefore must read data from database.  No local file reading permitted.'
+        do_read_lightcurve_from_local_fitsfile=0
+        do_make_planetmask=0
+    endelse
+; Run the qats algorithm:
         spawn,'ls depth_distribution.sav',result
 ;2.2 Clean up old temporary files
         file_delete, $
@@ -108,10 +121,10 @@ for ikid=0,nkid-1 do begin
         if(result eq '') then begin
             fit_transit, $
               kids, $
-              t0[indx]+54900d0, $
-              period[indx], $
-              pdot, $
-              tdur[indx]/24d0, $
+              t0=t0_curr, $
+              period=period_curr, $
+              pdot=pdot_curr, $
+              tdur=tdur_curr, $
               db_time=time, $
               db_flux=flux, $
               db_err_flux=err_flux, $
@@ -210,9 +223,6 @@ for ikid=0,nkid-1 do begin
 ; Now, re-gzip these files:
 ;    readcol,'fits_list.txt',fname,format='a'
 ;    for i=0,n_elements(fname)-1 do spawn,'gzip '+fname[i]
-    endif else begin
-        print,'Trouble identifying KID ',kid0[ikid],indx
-    endelse
 endfor
 return
 end
