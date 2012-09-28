@@ -3,7 +3,7 @@ pro fit_transit, $
                  t0=t0, $
                  period=period, $
                  pdot=pdot, $
-                 tdur=tdur, $
+                 tdur=td, $
                  db_time=db_time, $
                  db_flux=db_flux, $
                  db_err_flux=db_err_flux, $
@@ -327,7 +327,7 @@ for iseg=0,nseg-1 do begin
 ;+Debug plotting
                                 ;if(chi0-chi gt 20d0) then begin
                                 ;if(chi0-chi gt 20d0 and chi_stepfit-chi gt 20d0) then begin
-                    if(chi0-chi gt 20d0) then begin
+                    if(chi0-chi gt 20d0) and keyword_set(do_screen_plotting) then begin
                         !p.multi=[0,1,2]
                         time_for_plot=time[indx]
                         plot,[time_for_plot,time_for_plot,time_for_plot],[flux,poly(ttmp,coeff0),poly(ttmp,coeff)*model],ys=1,/nodata,charsize=2

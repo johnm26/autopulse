@@ -7,6 +7,8 @@ do_read_lightcurve_from_local_fitsfile_orig=0
 do_make_planetmask_master_orig=1
 sql_macro_tmpfile_name='tmpMacroMySQL.sql'
 sql_queryresult_tmpfile_name='tmpResultMySQL.tab'
+tt=0
+ephem=0
 q=0
 ; Now, find all of the KOIs for masking:
 restore,'koi_data01.sav'
@@ -215,9 +217,9 @@ for ikid=0,nkid-1 do begin
                 endelse
             endfor
         endfor
+        device,/close
         save,time,fsap,f,sntot,pmin,pmax,depth,ndepth,tdur,ndur,ephem,tt,datamax,filename='qats_depth_dur_'+kids+'.sav'
         spawn,'mv depth_distribution.sav depth_distribution_'+kids+'.sav'
-        device,/close
         print,'Finished'
         c=get_kbrd(1)
 ; Now, re-gzip these files:
