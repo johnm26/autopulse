@@ -1,25 +1,52 @@
 ; For a given KID, finds all of the files, unzips, detrends,
 ; runs QATS, saves & outputs spectrum:
 ;; @example:  IDL>  compute_qats,1432214,0.01,[1.0,300.0]
-pro compute_qats,kid0,f,prange
+pro compute_qats, $
+                  kid0, $
+                  f, $
+                  prange, $
+                  mask_planet=mask_planet, $
+                  working_dir=working_dir, $
+                  common_data_root_dir=common_data_root_dir
 ;1.  Set up internal variables
 do_read_lightcurve_from_local_fitsfile_orig=0
-do_make_planetmask_master_orig=1
-sql_macro_tmpfile_name='tmpMacroMySQL.sql'
-sql_queryresult_tmpfile_name='tmpResultMySQL.tab'
+if keyword_set(mask_planet) then begin
+    do_make_planetmask_master_orig=1
+endif else begin
+    do_make_planetmask_master_orig=0
+endelse
+if keyword_set(working_dir) then begin
+    working_dir=working_dir+PATH_SEP()
+endif else begin
+    working_dir='./'
+endelse
+if keyword_set(common_data_root_dir) then begin
+    common_data_root_dir=common_data_root_dir+PATH_SEP()
+endif else begin
+    common_data_root_dir='./'
+endelse
+sql_macro_tmpfile_name=working_dir+'tmpMacroMySQL.sql'
+sql_queryresult_tmpfile_name=working_dir+'tmpResultMySQL.tab'
 tt=0
 ephem=0
 q=0
 ; Now, find all of the KOIs for masking:
-restore,'koi_data01.sav'
+restore,common_data_root_dir+'koi_data01.sav'
 ;KID             LONG      = Array[3559]
 ;KOI             FLOAT     = Array[3559]
 ;PERIOD          DOUBLE    = Array[3559]
 ;T0              DOUBLE    = Array[3559]
 ;TDUR            FLOAT     = Array[3559]
 nkid=n_elements(kid0)
+
+;2.  Check that the FORTRAN QATS executable has been precompiled, since
+;you can't compile inside the IDL Virtual Machine
+;if ~file_test('test_qpt') then begin
+;    print,systime()+'|ERROR|test_qpt was not found.  Please compile a copy in the common_data_root_dir: '+common_data_root_dir
+;    return
 spawn,'gfortran -O3 -c qpt_detect.for -o qpt_detect.o'
 spawn,'gfortran -O3 test_qpt.for qpt_detect.o -o test_qpt'
+;endif
 
 ;2.  Loop over Kepler ID list
 for ikid=0,nkid-1 do begin
@@ -34,7 +61,7 @@ for ikid=0,nkid-1 do begin
 ;    readcol,'fits_gz_list.txt',fnamegz,format='a'
 ; gunzip the files:
 ;    for i=0,n_elements(fnamegz)-1 do spawn,'gunzip '+fnamegz[i]
-        spawn,'ls DATA/*'+kids+'*fits > fits_list.txt'
+        spawn,'ls '+common_data_root_dir+'DATA/*'+kids+'*fits > fits_list.txt'
         pdot=dblarr(nplanet)
         print,'Removing: ',KOI[indx],t0[indx],period[indx],tdur[indx]
         t0_curr=t0[indx]+54900d0
@@ -50,7 +77,7 @@ for ikid=0,nkid-1 do begin
         do_make_planetmask=0
     endelse
 ; Run the qats algorithm:
-        spawn,'ls depth_distribution.sav',result
+        spawn,'ls '+working_dir+'depth_distribution.sav',result
 ;2.2 Clean up old temporary files
         file_delete, $
           sql_macro_tmpfile_name, $
@@ -133,10 +160,12 @@ for ikid=0,nkid-1 do begin
               db_channel=channel, $
               db_quarter=quarter, $
               do_make_planetmask=do_make_planetmask, $
-              do_read_lightcurve_from_local_fitsfile=do_read_lightcurve_from_local_fitsfile
+              do_read_lightcurve_from_local_fitsfile=do_read_lightcurve_from_local_fitsfile, $
+              working_dir=working_dir, $
+              common_data_root_dir=common_data_root_dir
         endif
 
-        restore,'depth_distribution.sav'
+        restore,working_dir+'depth_distribution.sav'
         chisq_array[where(chisq_array lt 0d0)]=0d0
         ntime=n_elements(time)
         gap0=median(time[1:ntime-1L]-time[0:ntime-2L])
@@ -149,7 +178,7 @@ for ikid=0,nkid-1 do begin
         chisq_rat_max=0d0
         chisq_diff_max=0d0
         set_plot,'ps'
-        device,filename='kid'+kids+'_qats.ps'
+        device,filename=working_dir+'kid'+kids+'_qats.ps'
         for idepth=1,ndepth-1 do begin
 ;    for idepth=1,16 do begin
 ;    for idepth=9,9 do begin
@@ -160,15 +189,19 @@ for ikid=0,nkid-1 do begin
                 ;plot,chisq_array_polypulse[2,10,*]
                 ;stop
                 if count_detected_points gt 0 then begin
-                    spawn,'rm -f qats_spectrum.txt'
+                    spawn,'rm -f '+working_dir+'qats_spectrum.txt'
                     ftotal=dblarr(ncadence)
                     ftotal[cadence-min(cadence)]=chisq_array[idepth,iq,*]
-                    openw,1,'lightcurve.in'
+                    openw,1,working_dir+'lightcurve.in'
                     printf,1,ncadence,f,q,pmin,pmax,flag
                     for i=0L,ncadence-1L do printf,1,timetotal[i],ftotal[i],sigma
                     close,1
-                    spawn,'./test_qpt'
-                    readcol,'qats_spectrum.txt',tminnew,tmaxnew,mmnew,qnew,smaxnew,mbestnew,/silent
+                    spawn,'cp '+common_data_root_dir+'test_qpt '+working_dir
+                    cd,working_dir,current=current_dir
+                    spawn,working_dir+'test_qpt'
+                    cd,current_dir
+                    spawn,'rm -f '+working_dir+'test_qpt '
+                    readcol,working_dir+'qats_spectrum.txt',tminnew,tmaxnew,mmnew,qnew,smaxnew,mbestnew,/silent
                     pgrid=(tminnew+tmaxnew)*.5d0*gap0
                     ngrid=n_elements(smaxnew)
                     sntot[0,idepth,iq,0:ngrid-1]=pgrid
@@ -188,12 +221,12 @@ for ikid=0,nkid-1 do begin
                     if(smaxnew[i0[0]] gt 40d0 and chisq_diff[i0[0]] gt 10d0) then begin
                         plot,pgrid,chisq_rat,/xl
                         print,idepth,depth[idepth],iq,tdur[iq],pgrid[i0[0]],smaxnew[i0[0]],chisq_rat[i0[0]],chisq_diff[i0[0]]
-                        openw,1,'lightcurve.in'
+                        openw,1,working_dir+'lightcurve.in'
                         printf,1,ncadence,f,q,long(tminnew[i0[0]]),long(tminnew[i0[0]]),flag
                         for i=0L,ncadence-1L do printf,1,timetotal[i],ftotal[i],sigma
                         close,1
-                        spawn,'./test_qpt'
-                        readcol,'transit_times.txt',ntt,format='l'
+                        spawn,working_dir+'test_qpt'
+                        readcol,working_dir+'transit_times.txt',ntt,format='l'
                         tt=timetotal[ntt]
                         ephem=poly_fit(dindgen(n_elements(ntt)),tt,1,/double)
                         print,ephem,tt,ftotal[ntt],stddev(tt-ephem[0]-ephem[1]*dindgen(n_elements(ntt))),stddev(ftotal(ntt))^2/mean(ftotal(ntt))
@@ -218,10 +251,10 @@ for ikid=0,nkid-1 do begin
             endfor
         endfor
         device,/close
-        save,time,fsap,f,sntot,pmin,pmax,depth,ndepth,tdur,ndur,ephem,tt,datamax,filename='qats_depth_dur_'+kids+'.sav'
-        spawn,'mv depth_distribution.sav depth_distribution_'+kids+'.sav'
+        save,time,fsap,f,sntot,pmin,pmax,depth,ndepth,tdur,ndur,ephem,tt,datamax,filename=working_dir+'qats_depth_dur_'+kids+'.sav'
+        spawn,'mv '+working_dir+'depth_distribution.sav '+working_dir+'depth_distribution_'+kids+'.sav'
         print,'Finished'
-        c=get_kbrd(1)
+;        c=get_kbrd(1)
 ; Now, re-gzip these files:
 ;    readcol,'fits_list.txt',fname,format='a'
 ;    for i=0,n_elements(fname)-1 do spawn,'gzip '+fname[i]

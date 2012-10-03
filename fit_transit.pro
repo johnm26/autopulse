@@ -10,7 +10,9 @@ pro fit_transit, $
                  db_quarter=db_quarter, $
                  db_channel=db_channel, $
                  do_make_planetmask=do_make_planetmask, $
-                 do_read_lightcurve_from_local_fitsfile=do_read_lightcurve_from_local_fitsfile
+                 do_read_lightcurve_from_local_fitsfile=do_read_lightcurve_from_local_fitsfile, $
+                 working_dir=working_dir, $
+                 common_data_root_dir=common_data_root_dir
 ; 8/23/2012 This routine fits a transit light curve with a box-car
 ; transit shape of a specified depth (multiplied by a polynomial).  
 ; A delta-chi-square is computed relative to a fit with a single
@@ -39,7 +41,7 @@ endif else begin
                                           err_flux=db_err_flux, $
                                           channel=db_channel, $
                                           quarter=db_quarter, $
-                                          cbv_data_dir='./DATA/', $
+                                          cbv_data_dir=common_data_root_dir+'/DATA/', $
                                           log_lun=log_lun $
                                         )
 ;;Compare CBV results
@@ -56,9 +58,11 @@ endelse
 ;;=============================================================================
 ;;2.3 Plot to verify that the corrected light curve to be fit looks good by eye
 ;;=============================================================================
-set_plot,'X'
-plot,time,fflat,psym=3,title='Corrected light curve to be fit.',ystyle=1
-wait,1
+if keyword_set(do_screen_plotting) then begin
+    set_plot,'X'
+    plot,time,fflat,psym=3,title='Corrected light curve to be fit.',ystyle=1
+    wait,1
+endif
 ;;=============================================================================
 ;;2.4 Visualize the FFT of the light curve
 ;;=============================================================================
@@ -91,15 +95,17 @@ g_t_anal=fflat_nogap_region ;;*sin(4.*!DPI*time_nogap_region)
 u=lindgen(npoints)
 f=(((u+npoints/2) mod npoints) -(npoints/2))/(delta*npoints)
 g_f_fft=npoints*delta*fft(g_t_anal)
-!p.multi=[0,1,2]
-plot,time_nogap_region,g_t_anal,/ys,xtitle='Time (d)',ytitle='Relative flux'
-index_positive_frequency = where(f ge 0)
-plot,f[index_positive_frequency],abs(g_f_fft[index_positive_frequency]),psym=-4,xtitle='freq (cycles/day)',ytitle='power',title='power spectrum',xrange=[0,max(f)],/xs,/ylog
-!p.multi=[0,1,1]
+if keyword_set(do_screen_plotting) then begin
+    !p.multi=[0,1,2]
+    plot,time_nogap_region,g_t_anal,/ys,xtitle='Time (d)',ytitle='Relative flux',title=kid
+    index_positive_frequency = where(f ge 0)
+    plot,f[index_positive_frequency],abs(g_f_fft[index_positive_frequency]),psym=-4,xtitle='freq (cycles/day)',ytitle='power',title='power spectrum',xrange=[0,max(f)],/xs,/ylog
+    !p.multi=[0,1,1]
 ;om=(((u+npoints/2) mod npoints) -(npoints/2))/(delta*npoints)
 ;scargle,t,g_t_anal,om,px
-;stop
-wait,1
+    stop
+    wait,1
+endif
 ;;=============================================================================
 ;;Resume Eric's unmodified code
 ;;=============================================================================
@@ -156,11 +162,13 @@ if keyword_set(do_make_planetmask) then begin
             nnp=n0[ip]+dindgen(ntrans[ip])
             ttp=t0[ip]+period[ip]*nnp+pdot[ip]*nnp^2
             for it=0,ntrans[ip]-1 do mask_planet[ip,*]=(mask_planet[ip,*] or abs(time-ttp[it]) lt 1.1d0*td[ip])
-            plot,((time-t0[ip]+period[ip]/2d0) mod period[ip])+period[ip]/2d0,fflat/median(fflat,100),ys=1,ps=3,yr=[.998,1.002],col=-1,title='Planet masking'
-            oplot,((time-t0[ip]+period[ip]/2d0) mod period[ip])+period[ip]/2d0,fflat/median(fflat,100)*(mask_planet[ip,*] eq 0),col=255*256L,ps=3
-            legend,['retained','masked'],color=[255*256L,-1]
-            wait,1
-;    char=get_kbrd(1)
+            if keyword_set(do_screen_plotting) then begin
+                plot,((time-t0[ip]+period[ip]/2d0) mod period[ip])+period[ip]/2d0,fflat/median(fflat,100),ys=1,ps=3,yr=[.998,1.002],col=-1,title='Planet masking'
+                oplot,((time-t0[ip]+period[ip]/2d0) mod period[ip])+period[ip]/2d0,fflat/median(fflat,100)*(mask_planet[ip,*] eq 0),col=255*256L,ps=3
+                legend,['retained','masked'],color=[255*256L,-1]
+                wait,1
+;;    char=get_kbrd(1)
+            endif
         endif else begin
             mask_planet[ip,*]=0
         endelse
@@ -174,7 +182,7 @@ endif
 mask=bytarr(n_elements(time))
 ;;5.2 Exclude known bad sections
 ;;5.2.1 Read in known bad points from data file:
-readcol,'bad_regions.txt',bad_start,bad_end,format='f,f'
+readcol,common_data_root_dir+'bad_regions.txt',bad_start,bad_end,format='f,f'
 nbad=n_elements(bad_start)
 for ibad=0,nbad-1 do begin
 ;    if keyword_set(do_make_planetmask) then begin
@@ -201,7 +209,7 @@ if max(depth) gt outlier_threshold then begin
     err_msg = SYSTIME(/UTC) + "|ERROR|FIT_TRANSIT|One or more of the pulse depths to be tested exceeded the absolute outlier rejection threshold.  Iterating over the depths in excess of the threshold will cause unstable chisq results.  Please either increase the outlier_threshold or limit the depth array to smaller depths before proceeding."
     PRINT, err_msg
     ;;PRINTF, log_lun, err_msg
-    SAVE, FILENAME='error_FIT_TRANSIT.sav', /ALL
+    SAVE, FILENAME=working_dir+'error_FIT_TRANSIT.sav', /ALL
     stop
 endif
 mask= mask and (abs(fsap-median(fsap,20)) lt outlier_threshold)
@@ -290,7 +298,7 @@ for iseg=0,nseg-1 do begin
                     err_msg = SYSTIME(/UTC) + "|ERROR|FIT_TRANSIT|count_match_success is not equal to the number of elements in indx."
                     PRINT, err_msg
                     ;;PRINTF, log_lun, err_msg
-                    SAVE, FILENAME='error_FIT_TRANSIT.sav', /ALL
+                    SAVE, FILENAME=working_dir+'error_FIT_TRANSIT.sav', /ALL
                     stop
                 endif
 ;;6.2.1.2.2.1.2 Calculate the chi-squared:
@@ -368,7 +376,7 @@ save, $
   fsap, $
   ssap, $
   mask, $
-  filename='depth_distribution.sav'
+  filename=working_dir+'depth_distribution.sav'
 ;save,/all,filename='depth_distribution'+kid+'.sav'
 return
 end
