@@ -1,6 +1,6 @@
 ; For a given KID, finds all of the files, unzips, detrends,
 ; runs QATS, saves & outputs spectrum:
-;; @example:  IDL>  compute_qats,1432214,0.01,[1.0,300.0]
+;; @example:  IDL>  compute_qats,1432214,0.005,[1.0,300.0],mask_planet=0,working_dir='/astro/net/astro-agol/blevlee/CODE/condor/test3/test_working_dir',common_data_root_dir='/astro/net/astro-agol/blevlee/CODE/IDL/KEPLER_REDUX/autopulse'
 pro compute_qats, $
                   kid0, $
                   f, $
@@ -179,6 +179,7 @@ for ikid=0,nkid-1 do begin
         chisq_diff_max=0d0
         set_plot,'ps'
         device,filename=working_dir+'kid'+kids+'_qats.ps'
+        cd,working_dir,current=current_dir
         for idepth=1,ndepth-1 do begin
 ;    for idepth=1,16 do begin
 ;    for idepth=9,9 do begin
@@ -189,18 +190,16 @@ for ikid=0,nkid-1 do begin
                 ;plot,chisq_array_polypulse[2,10,*]
                 ;stop
                 if count_detected_points gt 0 then begin
-                    spawn,'rm -f '+working_dir+'qats_spectrum.txt'
+                    spawn,'\rm -f '+working_dir+'qats_spectrum.txt'
                     ftotal=dblarr(ncadence)
                     ftotal[cadence-min(cadence)]=chisq_array[idepth,iq,*]
                     openw,1,working_dir+'lightcurve.in'
                     printf,1,ncadence,f,q,pmin,pmax,flag
                     for i=0L,ncadence-1L do printf,1,timetotal[i],ftotal[i],sigma
                     close,1
-                    spawn,'cp '+common_data_root_dir+'test_qpt '+working_dir
-                    cd,working_dir,current=current_dir
+                    spawn,'\cp -f '+common_data_root_dir+'test_qpt '+working_dir
                     spawn,working_dir+'test_qpt'
-                    cd,current_dir
-                    spawn,'rm -f '+working_dir+'test_qpt '
+;                    spawn,'rm -f '+working_dir+'test_qpt '
                     readcol,working_dir+'qats_spectrum.txt',tminnew,tmaxnew,mmnew,qnew,smaxnew,mbestnew,/silent
                     pgrid=(tminnew+tmaxnew)*.5d0*gap0
                     ngrid=n_elements(smaxnew)
@@ -250,10 +249,12 @@ for ikid=0,nkid-1 do begin
                 endelse
             endfor
         endfor
+        cd,current_dir
         device,/close
         save,time,fsap,f,sntot,pmin,pmax,depth,ndepth,tdur,ndur,ephem,tt,datamax,filename=working_dir+'qats_depth_dur_'+kids+'.sav'
         spawn,'mv '+working_dir+'depth_distribution.sav '+working_dir+'depth_distribution_'+kids+'.sav'
         print,'Finished'
+        cd,current_dir
 ;        c=get_kbrd(1)
 ; Now, re-gzip these files:
 ;    readcol,'fits_list.txt',fname,format='a'
