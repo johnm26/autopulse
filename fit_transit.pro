@@ -364,9 +364,9 @@ for iseg=0,nseg-1 do begin
 endfor
 save, $
   chisq_array, $
-  chisq_array_poly, $
-  chisq_array_polypulse, $
-  chisq_array_polystep, $
+;  chisq_array_poly, $
+;  chisq_array_polypulse, $
+;  chisq_array_polystep, $
   depth, $
   ndepth, $
   tdur, $
