@@ -1,0 +1,55 @@
+#! /bin/bash
+
+#This script takes six arguments:  kid f prange mask_planet working_dir common_root_data_dir
+#example:  ./run_idlvm_driver_for_compute_qats.bsh 1432214 0.005 '[1.0,300.0]' 1 '/astro/net/astro-agol/blevlee/CODE/condor/test3/test_working_dir' '/astro/net/astro-agol/blevlee/CODE/IDL/KEPLER_REDUX/autopulse'
+
+#1.  Set up variables
+
+#idlvm_stdout_dir is the temporary directory where the virtual X windows will be stored.
+idlvm_stdout_dir=`echo $5 | sed s/\'//g`
+
+set -o monitor
+if [ ! -d idlvm_stdout_dir ]; then
+mkdir idlvm_stdout_dir
+fi
+rand_screen=$[($RANDOM % ($[59535-100]+1))+100]
+
+#XVFB_dir is the temporary directory where the virtual X windows will be stored.
+XVFB_dir=idlvm_stdout_dir/$rand_screen
+#XTE_dir is the directory where the xte executable from XAutomation is stored.
+XTE_dir=`echo $6 | sed s/\'//g`
+
+if [ -d $XVFB_dir ]; then
+rand_screen=$[($RANDOM % ($[59535-100]+1))+100]
+mkdir $XVFB_dir
+else
+mkdir $XVFB_dir
+fi
+
+Xvfb :$rand_screen -fbdir $XVFB_dir -screen 0 487x299x16 &
+XVFB=$!
+sleep 5
+export DISPLAY=:$rand_screen
+echo 'Virtual X Server created:' $rand_screen
+
+echo $1 $2 $3 $4 $5 $6
+
+idl -vm=./idlvm_driver_for_compute_qats.sav -args $1 $2 $3 $4 $5 $6 > $idlvm_stdout_dir/idlvm_stdout.txt &
+IDLID=$!
+sleep 10 #Wait a couple of minutes for the IDL VM to start up before attempting to click the splash screen
+echo 'IDL Virtual Machine started'
+$XTE_dir/xte -x :$rand_screen 'mousemove 394 235'
+$XTE_dir/xte -x :$rand_screen 'mouseclick 3'
+echo 'Clicked to continue pressed'
+
+sleep 10
+echo 'Waiting for IDL'
+wait $IDLID
+echo 'IDL is finished'
+echo 'Killing Virtual X Server'
+kill -9 $XVFB
+echo 'Removing '$idlvm_stdout_dir'/* file'
+sleep 10
+rm -rf idlvm_stdout_dir/$rand_screen
+
+done
