@@ -60,7 +60,7 @@ spawn,command_line_1,linux_output_messages
 while ~file_test(out_queryresultfile_name) do begin
     wait,1
 endwhile
-while file_lines(out_queryresultfile_name) eq 0 do begin
+while file_lines(out_queryresultfile_name) lt 2 do begin
     wait,20
     spawn,command_line_1,linux_output_messages
 endwhile
