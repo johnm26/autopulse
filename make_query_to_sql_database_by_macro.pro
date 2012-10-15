@@ -12,7 +12,8 @@ function make_query_to_sql_database_by_macro, $
                                  out_queryresultfile_name=out_queryresultfile_name, $
                                  log_lun=log_lun
 
-PRINT, SYSTIME(/UTC), "|Running make_query_to_sql_database_by_macro"
+spawn,'hostname',hostname,/noshell
+PRINT, SYSTIME(/UTC) + " "+hostname+"|Running make_query_to_sql_database_by_macro"
 
 ;;=============================================================================
 ;;0.0. Check log file
@@ -24,14 +25,14 @@ ENDIF
 ;;1.  Integrity checks on inputs
 ;;=============================================================================
 IF SIZE(in_scriptfile_name, /TYPE) NE 7 THEN BEGIN
-    err_msg = SYSTIME(/UTC) + "|ERROR|make_query_to_sql_database_by_macro|The specified input file name is not a string."
+    err_msg = SYSTIME(/UTC) + " "+hostname+"|ERROR|make_query_to_sql_database_by_macro|The specified input file name is not a string."
     PRINT, err_msg
     PRINTF, log_lun, err_msg
     SAVE, FILENAME='error_make_query_to_sql_database_by_macro.sav', /ALL
     RETURN, err_msg
 ENDIF ELSE BEGIN
     IF FILE_TEST(in_scriptfile_name) NE 1 THEN BEGIN
-        err_msg = SYSTIME(/UTC) + "|ERROR|make_query_to_sql_database_by_macro|The specified input file was not found: " + in_scriptfile_name
+        err_msg = SYSTIME(/UTC) + " "+hostname+"|ERROR|make_query_to_sql_database_by_macro|The specified input file was not found: " + in_scriptfile_name
         PRINT, err_msg
         PRINTF, log_lun, err_msg
         SAVE, FILENAME='error_make_query_to_sql_database_by_macro.sav', /ALL
@@ -39,7 +40,7 @@ ENDIF ELSE BEGIN
     ENDIF
 ENDELSE
 IF SIZE(out_queryresultfile_name, /TYPE) NE 7 THEN BEGIN
-    err_msg = SYSTIME(/UTC) + "|ERROR|make_query_to_sql_database_by_macro|The specified output file name is not a string."
+    err_msg = SYSTIME(/UTC) + " "+hostname+"|ERROR|make_query_to_sql_database_by_macro|The specified output file name is not a string."
     PRINT, err_msg
     PRINTF, log_lun, err_msg
     SAVE, FILENAME='error_make_query_to_sql_database_by_macro.sav', /ALL
@@ -53,6 +54,16 @@ command_line_1 = 'mysql -h tddb -u bvegaff --password=tddbKepler Kepler < '+in_s
 ;;3.  Use spawn to execute the command string
 ;;=============================================================================
 spawn,command_line_1,linux_output_messages
+;;=============================================================================
+;;3.1  Verify that the light curve was properly returned (not zero size)
+;;=============================================================================
+while ~file_test(out_queryresultfile_name) do begin
+    wait,1
+endwhile
+while file_lines(out_queryresultfile_name) eq 0 do begin
+    wait,20
+    spawn,command_line_1,linux_output_messages
+endwhile
 ;;=============================================================================
 ;;4.  Return success
 ;;=============================================================================

@@ -17,7 +17,8 @@ function make_parsed_lightcurve_from_queryresult, $
                                                   out_channel=out_channel, $
                                                   log_lun=log_lun
 
-PRINT, SYSTIME(/UTC), "|Running make_parsed_lightcurve_from_queryresult"
+spawn,'hostname',hostname,/noshell
+PRINT, SYSTIME(/UTC) + " "+hostname+"|Running make_parsed_lightcurve_from_queryresult"
 
 ;;=============================================================================
 ;;0.0. Check log file
@@ -29,21 +30,21 @@ ENDIF
 ;;1.  Integrity checks on inputs
 ;;=============================================================================
 IF SIZE(min_lines_required_in_queryresultfile, /TYPE) NE 2 AND SIZE(min_lines_required_in_queryresultfile, /TYPE) NE 3 THEN BEGIN
-    err_msg = SYSTIME(/UTC) + "|ERROR|make_parsed_lightcurve_from_queryresult|The specified min_lines_required_in_queryresultfile was not an int or a long int."
+    err_msg = SYSTIME(/UTC) + " "+hostname+"|ERROR|make_parsed_lightcurve_from_queryresult|The specified min_lines_required_in_queryresultfile was not an int or a long int."
     PRINT, err_msg
     PRINTF, log_lun, err_msg
     SAVE, FILENAME='error_make_parsed_lightcurve_from_queryresult.sav', /ALL
     RETURN, err_msg
 ENDIF
 IF SIZE(in_queryresultfile_name, /TYPE) NE 7 THEN BEGIN
-    err_msg = SYSTIME(/UTC) + "|ERROR|make_parsed_lightcurve_from_queryresult|The specified input file name is not a string."
+    err_msg = SYSTIME(/UTC) + " "+hostname+"|ERROR|make_parsed_lightcurve_from_queryresult|The specified input file name is not a string."
     PRINT, err_msg
     PRINTF, log_lun, err_msg
     SAVE, FILENAME='error_make_parsed_lightcurve_from_queryresult.sav', /ALL
     RETURN, err_msg
 ENDIF ELSE BEGIN
     IF FILE_TEST(in_queryresultfile_name) NE 1 THEN BEGIN
-        err_msg = SYSTIME(/UTC) + "|ERROR|make_parsed_lightcurve_from_queryresult|The specified input file was not found: " + in_queryresultfile_name
+        err_msg = SYSTIME(/UTC) + " "+hostname+"|ERROR|make_parsed_lightcurve_from_queryresult|The specified input file was not found: " + in_queryresultfile_name
         PRINT, err_msg
         PRINTF, log_lun, err_msg
         SAVE, FILENAME='error_make_parsed_lightcurve_from_queryresult.sav', /ALL
@@ -51,7 +52,7 @@ ENDIF ELSE BEGIN
     ENDIF
     n_lines_in_queryresultfile_name=file_lines(in_queryresultfile_name)
     IF n_lines_in_queryresultfile_name LE min_lines_required_in_queryresultfile THEN BEGIN
-        err_msg = SYSTIME(/UTC) + "|ERROR|make_parsed_lightcurve_from_queryresult|The number of lines in the input file was suspiciously small (less than "+string(min_lines_required_in_queryresultfile)+").  Number of lines: " +string(n_lines_in_queryresultfile_name)
+        err_msg = SYSTIME(/UTC) + " "+hostname+"|ERROR|make_parsed_lightcurve_from_queryresult|The number of lines in the input file was suspiciously small (less than "+string(min_lines_required_in_queryresultfile)+").  Number of lines: " +string(n_lines_in_queryresultfile_name)
         PRINT, err_msg
         PRINTF, log_lun, err_msg
         SAVE, FILENAME='error_make_parsed_lightcurve_from_queryresult.sav', /ALL
@@ -84,7 +85,7 @@ column_names=strsplit(column_names,/extract)
 ;;3.2  Figure out which columns we want to extract
 index_column_time=where(strmatch(column_names,time_column_name,/fold_case),count_column_time)
 IF count_column_time NE 1 THEN BEGIN
-        err_msg = SYSTIME(/UTC) + "|ERROR|make_parsed_lightcurve_from_queryresult|The specified column name was not found or ambiguous: " + time_column_name
+        err_msg = SYSTIME(/UTC) + " "+hostname+"|ERROR|make_parsed_lightcurve_from_queryresult|The specified column name was not found or ambiguous: " + time_column_name
         PRINT, err_msg
         PRINTF, log_lun, err_msg
         SAVE, FILENAME='error_make_parsed_lightcurve_from_queryresult.sav', /ALL
@@ -92,7 +93,7 @@ IF count_column_time NE 1 THEN BEGIN
 ENDIF
 index_column_flux=where(strmatch(column_names,flux_column_name,/fold_case),count_column_flux)
 IF count_column_flux NE 1 THEN BEGIN
-        err_msg = SYSTIME(/UTC) + "|ERROR|make_parsed_lightcurve_from_queryresult|The specified column name was not found or ambiguous: " + flux_column_name
+        err_msg = SYSTIME(/UTC) + " "+hostname+"|ERROR|make_parsed_lightcurve_from_queryresult|The specified column name was not found or ambiguous: " + flux_column_name
         PRINT, err_msg
         PRINTF, log_lun, err_msg
         SAVE, FILENAME='error_make_parsed_lightcurve_from_queryresult.sav', /ALL
@@ -100,7 +101,7 @@ IF count_column_flux NE 1 THEN BEGIN
 ENDIF
 index_column_err_flux=where(strmatch(column_names,err_flux_column_name,/fold_case),count_column_err_flux)
 IF count_column_err_flux NE 1 THEN BEGIN
-        err_msg = SYSTIME(/UTC) + "|ERROR|make_parsed_lightcurve_from_queryresult|The specified column name was not found or ambiguous: " + err_flux_column_name
+        err_msg = SYSTIME(/UTC) + " "+hostname+"|ERROR|make_parsed_lightcurve_from_queryresult|The specified column name was not found or ambiguous: " + err_flux_column_name
         PRINT, err_msg
         PRINTF, log_lun, err_msg
         SAVE, FILENAME='error_make_parsed_lightcurve_from_queryresult.sav', /ALL
@@ -108,7 +109,7 @@ IF count_column_err_flux NE 1 THEN BEGIN
 ENDIF
 index_column_quarter=where(strmatch(column_names,quarter_column_name,/fold_case),count_column_quarter)
 IF count_column_quarter LT 1 THEN BEGIN
-        err_msg = SYSTIME(/UTC) + "|ERROR|make_parsed_lightcurve_from_queryresult|The specified column name was not found: " + quarter_column_name
+        err_msg = SYSTIME(/UTC) + " "+hostname+"|ERROR|make_parsed_lightcurve_from_queryresult|The specified column name was not found: " + quarter_column_name
         PRINT, err_msg
         PRINTF, log_lun, err_msg
         SAVE, FILENAME='error_make_parsed_lightcurve_from_queryresult.sav', /ALL
@@ -116,7 +117,7 @@ IF count_column_quarter LT 1 THEN BEGIN
 ENDIF
 index_column_channel=where(strmatch(column_names,channel_column_name,/fold_case),count_column_channel)
 IF count_column_channel NE 1 THEN BEGIN
-        err_msg = SYSTIME(/UTC) + "|ERROR|make_parsed_lightcurve_from_queryresult|The specified column name was not found or ambiguous: " + channel_column_name
+        err_msg = SYSTIME(/UTC) + " "+hostname+"|ERROR|make_parsed_lightcurve_from_queryresult|The specified column name was not found or ambiguous: " + channel_column_name
         PRINT, err_msg
         PRINTF, log_lun, err_msg
         SAVE, FILENAME='error_make_parsed_lightcurve_from_queryresult.sav', /ALL
@@ -145,7 +146,7 @@ rdfloat, $
 ;;3.4  Integrity check on number of lines read compared to number of
 ;;lines in the file
 if n_elements(out_time) ne n_lines_in_queryresultfile_name-1 then begin
-        err_msg = SYSTIME(/UTC) + "|ERROR|make_parsed_lightcurve_from_queryresult|The number of data lines ("+string(n_elements(out_time))+")read in from file "+in_queryresultfile_name+" did not match the expected number "+string(n_lines_in_queryresultfile_name-1)
+        err_msg = SYSTIME(/UTC) + " "+hostname+"|ERROR|make_parsed_lightcurve_from_queryresult|The number of data lines ("+string(n_elements(out_time))+")read in from file "+in_queryresultfile_name+" did not match the expected number "+string(n_lines_in_queryresultfile_name-1)
         PRINT, err_msg
         PRINTF, log_lun, err_msg
         SAVE, FILENAME='error_make_parsed_lightcurve_from_queryresult.sav', /ALL

@@ -12,7 +12,8 @@ function make_sql_query_macro, $
                                out_scriptfile_name=out_scriptfile_name, $
                                log_lun=log_lun
 
-PRINT, SYSTIME(/UTC), "|Running make_sql_query_macro"
+spawn,'hostname',hostname,/noshell
+PRINT, SYSTIME(/UTC) + " "+hostname+"|Running make_sql_query_macro"
 
 ;;=============================================================================
 ;;0.0. Check log file
@@ -24,14 +25,14 @@ ENDIF
 ;;1.  Integrity checks on inputs
 ;;=============================================================================
 IF SIZE(out_scriptfile_name, /TYPE) NE 7 THEN BEGIN
-    err_msg = SYSTIME(/UTC) + "|ERROR|make_sql_query_macro|The specified output file name is not a string."
+    err_msg = SYSTIME(/UTC) + " "+hostname+"|ERROR|make_sql_query_macro|The specified output file name is not a string."
     PRINT, err_msg
     PRINTF, log_lun, err_msg
     SAVE, FILENAME='error_make_sql_query_macro.sav', /ALL
     RETURN, err_msg
 ENDIF
 IF SIZE(in_kepler_id, /TYPE) NE 7 THEN BEGIN
-    err_msg = SYSTIME(/UTC) + "|ERROR|make_sql_query_macro|The specified in_kepler_id was not a string."
+    err_msg = SYSTIME(/UTC) + " "+hostname+"|ERROR|make_sql_query_macro|The specified in_kepler_id was not a string."
     PRINT, err_msg
     PRINTF, log_lun, err_msg
     SAVE, FILENAME='error_make_sql_query_macro.sav', /ALL
