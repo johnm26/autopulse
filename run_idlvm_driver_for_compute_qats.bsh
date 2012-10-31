@@ -44,21 +44,28 @@ echo 'Virtual X Server created:' $rand_screen
 echo $1 $2 $3 $4 $5 $6
 
 idl -vm=./idlvm_driver_for_compute_qats.sav -args $1 $2 $3 $4 $5 $6 > $idlvm_stdout_dir/idlvm_stdout.txt &
+sleep 10
 IDLID=$!
-sleep 10 #Wait a couple of minutes for the IDL VM to start up before attempting to click the splash screen
+sleep 12 #Wait a couple of minutes for the IDL VM to start up before attempting to click the splash screen
 echo 'IDL Virtual Machine started'
 $XTE_dir/xte -x :$rand_screen 'mousemove 394 235'
 $XTE_dir/xte -x :$rand_screen 'mouseclick 3'
-echo 'Clicked to continue pressed'
+echo 'Click to continue pressed'
 
-sleep 10
+sleep 16
 echo 'Waiting for IDL'
 wait $IDLID
+while [ ! -f $idlvm_stdout_dir/donefile ]
+do
+  sleep 60
+  printf "." 
+done
+echo "Found donefile."
 echo 'IDL is finished'
 echo 'Killing Virtual X Server'
 kill -9 $XVFB
 echo 'Removing '$idlvm_stdout_dir'/* file'
-sleep 10
+sleep 20
 rm -rf idlvm_stdout_dir/$rand_screen
 
 done

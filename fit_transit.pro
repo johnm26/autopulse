@@ -80,6 +80,7 @@ index_start_nogap_region=index_time_interval_gaps[index_max_uninterrupted_length
 index_end_nogap_region=index_time_interval_gaps[index_max_uninterrupted_length_between_gaps+1]-1
 time_nogap_region=time[index_start_nogap_region:index_end_nogap_region]
 fflat_nogap_region=fflat[index_start_nogap_region:index_end_nogap_region]
+sig_nogap_region=sig[index_start_nogap_region:index_end_nogap_region]
 ;;=============================================================================
 ;;2.4.2 Run the FFT on the non-gappy data
 ;;=============================================================================
@@ -106,6 +107,18 @@ if keyword_set(do_screen_plotting) then begin
     stop
     wait,1
 endif
+;;=============================================================================
+;;2.5  Set up the polynomial detrending order
+;;=============================================================================
+;window_size=summary_of_fft_periods
+;ord=calc_best_poly_deg_using_bic( $
+;                                  data_x=time_nogap_region, $
+;                                  data_y=fflat_nogap_region, $
+;                                  data_err_y=sig_nogap_region, $
+;                                  max_trial_poly_deg=12L $
+;                                )
+ord=2
+;stop
 ;;=============================================================================
 ;;Resume Eric's unmodified code
 ;;=============================================================================
@@ -190,7 +203,7 @@ for ibad=0,nbad-1 do begin
 ;            mask_planet[ip,*]=mask_planet[ip,*] or (time gt bad_start[ibad] and time lt bad_end[ibad])
 ;        endfor
 ;    endif else begin
-        mask=mask or (time gt bad_start[ibad] and time lt bad_end[ibad])
+    mask=mask or (time gt bad_start[ibad] and time lt bad_end[ibad])
 ;    endelse
 endfor
 ;;5.2.2 Invert 0's into 1's and vice versa:
@@ -228,7 +241,9 @@ chisq_array_poly=dblarr(ndepth,ndur,nt)
 chisq_array_polypulse=dblarr(ndepth,ndur,nt)
 chisq_array_polystep=dblarr(ndepth,ndur,nt)
 size_array=intarr(ndur,nt)
-ord=2
+;should I use the same order over the whole lc, or should we attempt
+;to evaluate locally?
+;ord=2
 ;;=============================================================================
 ;;6.2  Commence the loop over segments:
 ;;=============================================================================
@@ -367,7 +382,7 @@ save, $
 ;  chisq_array_poly, $
 ;  chisq_array_polypulse, $
 ;  chisq_array_polystep, $
-  depth, $
+depth, $
   ndepth, $
   tdur, $
   ndur, $

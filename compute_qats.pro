@@ -242,10 +242,31 @@ for ikid=0,nkid-1 do begin
                     for i=1,n_elements(ntt)-1 do oplot,time-tt[i],chisq_array[idepth,iq,*]
 ;        c=get_kbrd(1)
 ;        wait,.005
-                    plot,time-tt[0],fsap/median(fsap[where(abs(time-tt[0]) lt 2d0)]),ys=1,xr=[-1,1],psym=6,symsize=0.25,thick=2,yr=[.999,1.001],tit='Depth= '+string(depth[idepth]*1d6,format='(f8.1)')+' ppm; Duration= '+string(tdur[iq]*24d0,format='(f6.1)')+' hr; f= '+string(f,format='(f6.3)')+'; t0= '+string(ephem[0],format='(f10.5)')+'; Period= '+string(ephem[1],format='(f10.5)')
-                    for i=1,n_elements(ntt)-1 do begin
-                        iin=where(abs(time-tt[i]) lt 2d0)
-                        if(iin[0] ge 0) then oplot,time-tt[i],fsap/median(fsap[iin]),psym=6,symsize=0.25,thick=2
+                    is_first_plot=1
+                    for i=0,n_elements(ntt)-1 do begin
+                        iin=where(abs(time-tt[i]) lt 2d0,count_in_transit)
+;;if(iin[0] ge 0) then 
+                        if count_in_transit gt 0 then begin
+                            if is_first_plot eq 1 then begin
+                                plot, $
+                                  time-tt[i],$
+                                  fsap/median(fsap[iin]), $
+                                  ys=1, $
+                                  xr=[-1,1], $
+                                  psym=6, $
+                                  symsize=0.25, $
+                                  thick=2, $
+                                  yr=[.999,1.001], $
+                                  tit='Depth= '+string(depth[idepth]*1d6,format='(f8.1)')+ $
+                                  ' ppm; Duration= '+string(tdur[iq]*24d0,format='(f6.1)')+ $
+                                  ' hr; f= '+string(f,format='(f6.3)')+ $
+                                  '; t0= '+string(ephem[0],format='(f10.5)')+ $
+                                  '; Period= '+string(ephem[1],format='(f10.5)')
+                                is_first_plot=0
+                            endif else begin
+                                oplot,time-tt[i],fsap/median(fsap[iin]),psym=6,symsize=0.25,thick=2
+                            endelse
+                        endif
                     endfor
                 endif
 ;        c=get_kbrd(1)
@@ -268,6 +289,7 @@ for ikid=0,nkid-1 do begin
 ;    for i=0,n_elements(fname)-1 do spawn,'gzip '+fname[i]
     spawn,'gzip '+working_dir+'depth_distribution_'+kids+'.sav'
     spawn,'gzip '+working_dir+'kid'+kids+'_qats.ps'
+    spawn,'touch '+working_dir+'donefile'
 endfor
 return
 end
