@@ -46,6 +46,7 @@ n_quarters=n_elements(uniq_quarters)
 ;;goes over the quantity of quarters available (it does not start at
 ;;quarter 0)
 ;;=============================================================================
+is_first_valid_quarter=1
 for i=0L,n_quarters-1 do begin
 ;;3.1  Set up indices into arrays for this quarter
                                 ;print,uniq_quarters[i]
@@ -80,7 +81,7 @@ for i=0L,n_quarters-1 do begin
         normalized_err_flux_quarter_i=err_flux_quarter_i/median(flux_quarter_i)
 ;;3.3  Concatenate each quarter's values together
 ;;3.3.1  Initialize the concatenation with the first available quarter
-        if i eq 0 then begin
+        if is_first_valid_quarter then begin
             time_concat=time_quarter_i
             normalized_flux_concat=normalized_flux_quarter_i
             normalized_err_flux_concat=normalized_err_flux_quarter_i
@@ -93,6 +94,7 @@ for i=0L,n_quarters-1 do begin
             vec7=cbv.vector_7
             vec8=cbv.vector_8
             qtr=quarter[index_this_quarter]
+            is_first_valid_quarter=0
 ;;3.3.2  Continue the concatenation by joining on to the previous quarters
         endif else begin
             time_concat=[time_concat,time_quarter_i]
