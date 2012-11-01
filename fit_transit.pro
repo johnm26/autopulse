@@ -12,7 +12,8 @@ pro fit_transit, $
                  do_make_planetmask=do_make_planetmask, $
                  do_read_lightcurve_from_local_fitsfile=do_read_lightcurve_from_local_fitsfile, $
                  working_dir=working_dir, $
-                 common_data_root_dir=common_data_root_dir
+                 common_data_root_dir=common_data_root_dir, $
+                 fit_transit_donefile_name=fit_transit_donefile_name
 ; 8/23/2012 This routine fits a transit light curve with a box-car
 ; transit shape of a specified depth (multiplied by a polynomial).  
 ; A delta-chi-square is computed relative to a fit with a single
@@ -392,6 +393,7 @@ depth, $
   ssap, $
   mask, $
   filename=working_dir+'depth_distribution.sav'
+spawn,'touch '+working_dir+fit_transit_donefile_name
 ;save,/all,filename='depth_distribution'+kid+'.sav'
 return
 end

@@ -27,6 +27,7 @@ endif else begin
 endelse
 sql_macro_tmpfile_name=working_dir+'tmpMacroMySQL.sql'
 sql_queryresult_tmpfile_name=working_dir+'tmpResultMySQL.tab'
+fit_transit_donefile_name='fit_transit_donefile'
 tt=0
 ephem=0
 q=0
@@ -76,85 +77,71 @@ for ikid=0,nkid-1 do begin
         do_read_lightcurve_from_local_fitsfile=0
         do_make_planetmask=0
     endelse
-; Run the qats algorithm:
-    spawn,'ls '+working_dir+'depth_distribution.sav',result
+;2.1 Check whether fit_transit previously finished and saved its work
+;here.  If it is already accomplished, we can skip ahead.
+    result=''
+    if file_test(working_dir+fit_transit_donefile_name) then spawn,'ls '+working_dir+'depth_distribution.sav',result
+    if(result eq '') then begin
 ;2.2 Clean up old temporary files
-    file_delete, $
-      sql_macro_tmpfile_name, $
-      sql_queryresult_tmpfile_name, $
-      /allow_nonexistent
+        file_delete, $
+          sql_macro_tmpfile_name, $
+          sql_queryresult_tmpfile_name, $
+          /allow_nonexistent
 ;2.2.1 Double-check that delete is finished;  if not, wait.
-    while file_test(sql_macro_tmpfile_name) do begin
-        wait,0.1
-    endwhile
-    while file_test(sql_queryresult_tmpfile_name) do begin
-        wait,1
-    endwhile
+        while file_test(sql_macro_tmpfile_name) do begin
+            wait,0.1
+        endwhile
+        while file_test(sql_queryresult_tmpfile_name) do begin
+            wait,1
+        endwhile
 ;2.3 By default, read from Kepler SQL database (but don't do it if the
 ;local reading keyword is set)
-    if ~keyword_set(do_read_lightcurve_from_local_fitsfile) then begin
+        if ~keyword_set(do_read_lightcurve_from_local_fitsfile) then begin
 ;2.3.1 Form the SQL query
-        status=make_sql_query_macro( $
-                                     in_kepler_id=kids, $
-                                     out_scriptfile_name=sql_macro_tmpfile_name, $
-                                     log_lun=log_lun $
-                                   )
-        IF SIZE(status, /TYPE) EQ 7 THEN BEGIN
-            err_msg = SYSTIME(/UTC) + "|ERROR|compute_qats|Halting on main level due to error status passed up from make_sql_query_macro."
-            PRINT, err_msg
-            PRINTF, log_lun, err_msg
-            stop
-        ENDIF
+            status=make_sql_query_macro( $
+                                         in_kepler_id=kids, $
+                                         out_scriptfile_name=sql_macro_tmpfile_name, $
+                                         log_lun=log_lun $
+                                       )
+            IF SIZE(status, /TYPE) EQ 7 THEN BEGIN
+                err_msg = SYSTIME(/UTC) + "|ERROR|compute_qats|Halting on main level due to error status passed up from make_sql_query_macro."
+                PRINT, err_msg
+                PRINTF, log_lun, err_msg
+                stop
+            ENDIF
 ;2.3.2 Execute the SQL query
-        status=make_query_to_sql_database_by_macro( $
-                                                    in_scriptfile_name=sql_macro_tmpfile_name, $
-                                                    out_queryresultfile_name=sql_queryresult_tmpfile_name, $
-                                                    log_lun=log_lun $
-                                                  )
-        IF SIZE(status, /TYPE) EQ 7 THEN BEGIN
-            err_msg = SYSTIME(/UTC) + "|ERROR|compute_qats|Halting on main level due to error status passed up from make_query_to_sql_database_by_macro."
-            PRINT, err_msg
-            PRINTF, log_lun, err_msg
-            stop
-        ENDIF
-;2.3.3 Parse the query result
-        status=make_parsed_lightcurve_from_queryresult( $
-                                                        in_queryresultfile_name=sql_queryresult_tmpfile_name, $
-                                                        min_lines_required_in_queryresultfile=3, $
-                                                        out_time=time, $
-                                                        out_flux=flux, $
-                                                        out_err_flux=err_flux, $
-                                                        out_quarter=quarter, $
-                                                        out_channel=channel, $
+            status=make_query_to_sql_database_by_macro( $
+                                                        in_scriptfile_name=sql_macro_tmpfile_name, $
+                                                        out_queryresultfile_name=sql_queryresult_tmpfile_name, $
                                                         log_lun=log_lun $
                                                       )
-        IF SIZE(status, /TYPE) EQ 7 THEN BEGIN
-            err_msg = SYSTIME(/UTC) + "|ERROR|compute_qats|Halting on main level due to error status passed up from make_parsed_lightcurve_from_queryresult."
-            PRINT, err_msg
-            PRINTF, log_lun, err_msg
-            stop
-        ENDIF
-    endif
+            IF SIZE(status, /TYPE) EQ 7 THEN BEGIN
+                err_msg = SYSTIME(/UTC) + "|ERROR|compute_qats|Halting on main level due to error status passed up from make_query_to_sql_database_by_macro."
+                PRINT, err_msg
+                PRINTF, log_lun, err_msg
+                stop
+            ENDIF
+;2.3.3 Parse the query result
+            status=make_parsed_lightcurve_from_queryresult( $
+                                                            in_queryresultfile_name=sql_queryresult_tmpfile_name, $
+                                                            min_lines_required_in_queryresultfile=3, $
+                                                            out_time=time, $
+                                                            out_flux=flux, $
+                                                            out_err_flux=err_flux, $
+                                                            out_quarter=quarter, $
+                                                            out_channel=channel, $
+                                                            log_lun=log_lun $
+                                                          )
+            IF SIZE(status, /TYPE) EQ 7 THEN BEGIN
+                err_msg = SYSTIME(/UTC) + "|ERROR|compute_qats|Halting on main level due to error status passed up from make_parsed_lightcurve_from_queryresult."
+                PRINT, err_msg
+                PRINTF, log_lun, err_msg
+                stop
+            ENDIF
+        endif
 
-                                ;+Order arrays by time
-                                ;index_time_ascending=sort(time)
-                                ;time=time[index_time_ascending]
-                                ;flux=flux[index_time_ascending]
-                                ;err_flux=err_flux[index_time_ascending]
-                                ;quarter=quarter[index_time_ascending]
-                                ;channel=channel[index_time_ascending]
-                                ;-
+;2.3.4 Run fit_transit on the parsed light curve 
 
-                                ;+Debug:  trimming off the initial jump
-                                ;index_time_leadjunk=where(time lt 187.0)
-                                ;time=time[max(index_time_leadjunk):*]
-                                ;flux=flux[max(index_time_leadjunk):*]
-                                ;err_flux=err_flux[max(index_time_leadjunk):*]
-                                ;channel=channel[max(index_time_leadjunk):*]
-                                ;quarter=quarter[max(index_time_leadjunk):*]
-                                ;-End debug
-
-    if(result eq '') then begin
         fit_transit, $
           kids, $
           t0=t0_curr, $
@@ -169,7 +156,8 @@ for ikid=0,nkid-1 do begin
           do_make_planetmask=do_make_planetmask, $
           do_read_lightcurve_from_local_fitsfile=do_read_lightcurve_from_local_fitsfile, $
           working_dir=working_dir, $
-          common_data_root_dir=common_data_root_dir
+          common_data_root_dir=common_data_root_dir, $
+          fit_transit_donefile_name=fit_transit_donefile_name
     endif
 
     restore,working_dir+'depth_distribution.sav'
