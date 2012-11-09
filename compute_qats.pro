@@ -27,10 +27,11 @@ endif else begin
 endelse
 sql_macro_tmpfile_name=working_dir+'tmpMacroMySQL.sql'
 sql_queryresult_tmpfile_name=working_dir+'tmpResultMySQL.tab'
+sql_query_donefile_name='sql_query_donefile'
 fit_transit_donefile_name='fit_transit_donefile'
 tt=0
 ephem=0
-q=0
+q=1 ;;07Nov2012 q had been equal to 0 for Eric's FORTRAN version of qpt_detect.  However, Josh's quick_qats code crashes by running one beyond an array if q=0.  Try setting q=1.  !!!MAKE SURE ERIC'S VERSION RETURNS THE SAME RESULT AS BEFORE AFTER THIS CHANGE!!!
 ; Now, find all of the KOIs for masking:
 restore,common_data_root_dir+'koi_data01.sav'
 ;KID             LONG      = Array[3559]
@@ -47,6 +48,8 @@ nkid=n_elements(kid0)
 ;    return
 spawn,'gfortran -O3 -c qpt_detect.for -o qpt_detect.o'
 spawn,'gfortran -O3 test_qpt.for qpt_detect.o -o test_qpt'
+spawn,'gfortran -O3 -c quick_qats.for -o quick_qats.o'
+spawn,'gfortran -O3 run_quick_qats.for quick_qats.o -o run_quick_qats'
 ;endif
 
 ;2.  Loop over Kepler ID list
@@ -82,46 +85,63 @@ for ikid=0,nkid-1 do begin
     result=''
     if file_test(working_dir+fit_transit_donefile_name) then spawn,'ls '+working_dir+'depth_distribution.sav',result
     if(result eq '') then begin
-;2.2 Clean up old temporary files
-        file_delete, $
-          sql_macro_tmpfile_name, $
-          sql_queryresult_tmpfile_name, $
-          /allow_nonexistent
-;2.2.1 Double-check that delete is finished;  if not, wait.
-        while file_test(sql_macro_tmpfile_name) do begin
-            wait,0.1
-        endwhile
-        while file_test(sql_queryresult_tmpfile_name) do begin
-            wait,1
-        endwhile
-;2.3 By default, read from Kepler SQL database (but don't do it if the
+;2.2 By default, read from Kepler SQL database (but don't do it if the
 ;local reading keyword is set)
         if ~keyword_set(do_read_lightcurve_from_local_fitsfile) then begin
+
+;;;2.3 Clean up old temporary files
+;;        file_delete, $
+;;          sql_macro_tmpfile_name, $
+;;          sql_queryresult_tmpfile_name, $
+;;          /allow_nonexistent
+;;;2.3.1 Double-check that delete is finished;  if not, wait.
+;;        while file_test(sql_macro_tmpfile_name) do begin
+;;            wait,0.1
+;;        endwhile
+;;        while file_test(sql_queryresult_tmpfile_name) do begin
+;;            wait,1
+;;        endwhile
+
+;2.3 Check whether light curve has already been fetched from SQL
+;database.  If not, then proceed with the querying.
+;+START DEBUG:  a section to ensure I don't delete all of my existing .tab
+;files in old versions while I rerun on those while waiting for the
+;SQL database update.  BLL, 02Nov2012.
+            spawn,'touch '+working_dir+sql_query_donefile_name
+            while ~file_test(working_dir+sql_query_donefile_name) do begin
+                print,'.'
+                wait,0.1
+            endwhile
+;-END DEBUG
+            if ~file_test(working_dir+sql_query_donefile_name) then begin
 ;2.3.1 Form the SQL query
-            status=make_sql_query_macro( $
-                                         in_kepler_id=kids, $
-                                         out_scriptfile_name=sql_macro_tmpfile_name, $
-                                         log_lun=log_lun $
-                                       )
-            IF SIZE(status, /TYPE) EQ 7 THEN BEGIN
-                err_msg = SYSTIME(/UTC) + "|ERROR|compute_qats|Halting on main level due to error status passed up from make_sql_query_macro."
-                PRINT, err_msg
-                PRINTF, log_lun, err_msg
-                stop
-            ENDIF
+                status=make_sql_query_macro( $
+                                             in_kepler_id=kids, $
+                                             out_scriptfile_name=sql_macro_tmpfile_name, $
+                                             log_lun=log_lun $
+                                           )
+                IF SIZE(status, /TYPE) EQ 7 THEN BEGIN
+                    err_msg = SYSTIME(/UTC) + "|ERROR|compute_qats|Halting on main level due to error status passed up from make_sql_query_macro."
+                    PRINT, err_msg
+                    PRINTF, log_lun, err_msg
+                    stop
+                ENDIF
 ;2.3.2 Execute the SQL query
-            status=make_query_to_sql_database_by_macro( $
-                                                        in_scriptfile_name=sql_macro_tmpfile_name, $
-                                                        out_queryresultfile_name=sql_queryresult_tmpfile_name, $
-                                                        log_lun=log_lun $
-                                                      )
-            IF SIZE(status, /TYPE) EQ 7 THEN BEGIN
-                err_msg = SYSTIME(/UTC) + "|ERROR|compute_qats|Halting on main level due to error status passed up from make_query_to_sql_database_by_macro."
-                PRINT, err_msg
-                PRINTF, log_lun, err_msg
-                stop
-            ENDIF
-;2.3.3 Parse the query result
+                status=make_query_to_sql_database_by_macro( $
+                                                            in_scriptfile_name=sql_macro_tmpfile_name, $
+                                                            out_queryresultfile_name=sql_queryresult_tmpfile_name, $
+                                                            log_lun=log_lun $
+                                                          )
+                IF SIZE(status, /TYPE) EQ 7 THEN BEGIN
+                    err_msg = SYSTIME(/UTC) + "|ERROR|compute_qats|Halting on main level due to error status passed up from make_query_to_sql_database_by_macro."
+                    PRINT, err_msg
+                    PRINTF, log_lun, err_msg
+                    stop
+                ENDIF
+;2.3.2.1 Write a donefile to signal when SQL query was successful
+                spawn,'touch '+working_dir+sql_query_donefile_name
+            endif
+;2.4 Parse the query result
             status=make_parsed_lightcurve_from_queryresult( $
                                                             in_queryresultfile_name=sql_queryresult_tmpfile_name, $
                                                             min_lines_required_in_queryresultfile=3, $
@@ -140,7 +160,7 @@ for ikid=0,nkid-1 do begin
             ENDIF
         endif
 
-;2.3.4 Run fit_transit on the parsed light curve 
+;2.5 Run fit_transit on the parsed light curve 
 
         fit_transit, $
           kids, $
@@ -176,11 +196,10 @@ for ikid=0,nkid-1 do begin
     device,filename=working_dir+'kid'+kids+'_qats.ps'
     cd,working_dir,current=current_dir
     for idepth=1,ndepth-1 do begin
-;    for idepth=1,16 do begin
-;    for idepth=9,9 do begin
-;      for iq=8,8 do begin
-;      for iq=13,13 do begin
+;    for idepth=12,12 do begin
+;      for iq=12,12 do begin
         for iq=0,ndur-1 do begin
+            print,systime(/UTC)+'|Trying depth #'+strtrim(string(idepth),2)+' of '+strtrim(string(ndepth),2)+', duration #'+strtrim(string(iq),2)+' of '+strtrim(string(ndur),2)
             index_detected_points=where(chisq_array[idepth,iq,*] gt 0,count_detected_points)
                                 ;plot,chisq_array_polypulse[2,10,*]
                                 ;stop
@@ -192,8 +211,30 @@ for ikid=0,nkid-1 do begin
                 printf,1,ncadence,f,q,pmin,pmax,flag
                 for i=0L,ncadence-1L do printf,1,timetotal[i],ftotal[i],sigma
                 close,1
-                spawn,'\cp -f '+common_data_root_dir+'test_qpt '+working_dir
-                spawn,working_dir+'test_qpt'
+;print,systime(/UTC)+'|Starting FORTRAN version of test_qpt...'
+;                spawn,'\cp -f '+common_data_root_dir+'test_qpt '+working_dir
+;                spawn,working_dir+'test_qpt'
+;print,systime(/UTC)+'|...finished FORTRAN version of test_qpt.'
+print,systime(/UTC)+'|Starting FORTRAN version of run_quick_qats...'
+                spawn,'\cp -f '+common_data_root_dir+'run_quick_qats '+working_dir
+                spawn,working_dir+'run_quick_qats'
+print,systime(/UTC)+'|...finished FORTRAN version of run_quick_qats.'
+;stop
+;print,systime(/UTC)+'|Starting IDL QUICK_QATS version of test_qpt...'
+;                 status=test_qpt( $
+;                                  fractionalperiodwindow_f=f, $
+;                                  boxwidth_q=q, $
+;                                  n_cadences=ncadence, $
+;                                  searchperiod_npoints_lo=pmin, $
+;                                  searchperiod_npoints_hi=pmax, $
+;                                  flag=flag, $
+;                                  x_values=timetotal, $
+;                                  y_values=ftotal, $
+;                                  yerr_values=sigma, $
+;                                  working_dir=working_dir $
+;                               )
+;print,systime(/UTC)+'|...finished IDL QUICK_QATS version of test_qpt...'
+;stop
 ;                    spawn,'rm -f '+working_dir+'test_qpt '
                 readcol,working_dir+'qats_spectrum.txt',tminnew,tmaxnew,mmnew,qnew,smaxnew,mbestnew,/silent
                 pgrid=(tminnew+tmaxnew)*.5d0*gap0
@@ -236,6 +277,7 @@ for ikid=0,nkid-1 do begin
 ;;if(iin[0] ge 0) then 
                         if count_in_transit gt 0 then begin
                             if is_first_plot eq 1 then begin
+                                y_plot_halfheight=max([3.0*depth[idepth],median(err_flux)])
                                 plot, $
                                   time-tt[i],$
                                   fsap/median(fsap[iin]), $
@@ -244,7 +286,7 @@ for ikid=0,nkid-1 do begin
                                   psym=6, $
                                   symsize=0.25, $
                                   thick=2, $
-                                  yr=[.999,1.001], $
+                                  yr=[1.0-y_plot_halfheight,1.0+y_plot_halfheight], $ ;[.999,1.001], $
                                   tit='Depth= '+string(depth[idepth]*1d6,format='(f8.1)')+ $
                                   ' ppm; Duration= '+string(tdur[iq]*24d0,format='(f6.1)')+ $
                                   ' hr; f= '+string(f,format='(f6.3)')+ $

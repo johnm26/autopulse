@@ -358,7 +358,8 @@ C     ============================================================
       return
       end
 
-      subroutine quick_qats (data,ndata,DeltaMin,DeltaMax,q,nhat,smax)
+      subroutine quick_qats (
+     &     data,ndata,DeltaMin,DeltaMax,q,nhat,smax,mbest)
       implicit none
       include 'qpt_include.for'
       integer*4 ndata,DeltaMin,DeltaMax,q,nhat(0:ntmax-1)
@@ -382,6 +383,8 @@ C     ============================================================
       real*8 mm
       integer*4 M
       real*8 maxgammaN_debug
+      integer*4 indices(0:ntmax-1)
+      integer*4 i_mm
 
       call gn (ndata,gI,data,DeltaMin,DeltaMax,q,N)
       BIG=2000d0
@@ -421,17 +424,24 @@ c      Gmax = max(G(bm:b),mu)
          index = mu     
 c         if (i.eq.25) then
             mm = maxgammaN(ndata,G,mu,DeltaMin,DeltaMax,q,N,index)
-            write(6,*) i,mm,index,a-1
+c            write(6,*) i,mm,index,a-1
 c         else
 c            mm = maxgammaN(ndata,G,mu,DeltaMin,DeltaMax,q,N,index)
 c         endif
          mu = index
          mus(i) = mu
+c         write(6,*) i
       enddo
 
-      M = i-1
+      M = i
 
-c      write(6,*) DeltaMin,N
+      do i_mm=1,M
+         indices(i_mm-1) = mus(M-i_mm)
+      enddo
+
+      nhat = indices
+      mbest= M
+      smax = Gmax/sqrt(1.0*M*q)
 
 c        smaxMM(MM-mmin)=fmax(MM,ndata,tmin,tmax,q,dc,nhat,fast)
 c$$$c Uses the Kel'Manov & Jeon algorithm for detection of

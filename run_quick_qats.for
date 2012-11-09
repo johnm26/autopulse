@@ -28,15 +28,15 @@ C        f=0.0075
         open(unit=7,file='qats_spectrum.txt',position='append')
         smax_max=0d0
 C        write(6,*) tmin,tmax,p1,p2
-c        do while(tmin.le.p2) 
+        do while(tmin.le.p2) 
 cDEBUGGING START
-        do while(tmin.lt.ceiling(p1*(1d0+f))) 
+c        do while(tmin.lt.ceiling(p1*(1d0+f))) 
 cDEBUGGING END
 C          write(6,*) tmin,tmax,mm,q,smax
           do j=0,ntmax-1
             nhat(j)=0d0
           enddo
-          call quick_qats (flux,ntime,tmin,tmax,q,nhat,smax)
+          call quick_qats (flux,ntime,tmin,tmax,q,nhat,smax,mbest)
 c          call qpt_detect (flux,ntime+q,mm,tmin,tmax,q,nhat,smax,
 c     &     flag,mbest)
 C          smax=smax/sqrt(dble(q*mbest))

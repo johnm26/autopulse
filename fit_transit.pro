@@ -27,6 +27,17 @@ pro fit_transit, $
 ;;=============================================================================
 @const
 ;;=============================================================================
+;;1.1 Range of depths of the transit to search over:
+;;=============================================================================
+depth=[0d0,3.2d-5,4d-5,5d-5,6.4d-5,8d-5,.000100,.000128,.000160,.000200,.000256,.000320,.000400,.000512,.000640,.000800,.001000,.01,.024]
+;depth=[0d0,.001,.024]
+ndepth=n_elements(depth)
+;;=============================================================================
+;;1.2 Range of durations of the transit to search over:
+;;=============================================================================
+tdur=[1d0,1.25,1.5,1.75,2d0,2.5,3d0,3.5,4d0,4.5d0,5d0,5.5d0,6d0,6.5,7d0,7.5,8d0,8.5,9d0,9.5,10d0]/24d0
+ndur=n_elements(tdur)
+;;=============================================================================
 ;;2.1  Reading data from fits files
 ;;=============================================================================
 if keyword_set(do_read_lightcurve_from_local_fitsfile) then begin
@@ -75,50 +86,108 @@ time_interval=time[1:n_elements(time)-1]-time[0:n_elements(time)-2]
 median_time_interval=median(time_interval)
 index_time_interval_gaps=where(abs(time_interval-median_time_interval) gt time_interval_matching_threshold,count_time_interval_gaps)
 uninterrupted_length_between_gaps=index_time_interval_gaps[1:n_elements(index_time_interval_gaps)-1]-index_time_interval_gaps[0:n_elements(index_time_interval_gaps)-2]
+;;=============================================================================
+;;2.4.1.2 Sort to get an assortment of the longest regions to test with
+;;BIC polynomial order chooser.
+;;=============================================================================
+index_uninterrupted_length_between_gaps_sorted=reverse(sort(uninterrupted_length_between_gaps))
+;;=============================================================================
+;;2.4.2. Loop through a handful of the longest uninterrupted regions,
+;;and pick the median polynomial order to progress
+;;=============================================================================
+number_of_bic_test_regions=20L
+bic_chosen_polynomial_orders=lonarr(number_of_bic_test_regions)
+for i=0L,number_of_bic_test_regions-1 do begin
 ;max_uninterrupted_length_between_gaps=max(uninterrupted_length_between_gaps,index_max_uninterrupted_length_between_gaps)
-max_uninterrupted_length_between_gaps=max(uninterrupted_length_between_gaps,index_max_uninterrupted_length_between_gaps)
-index_start_nogap_region=index_time_interval_gaps[index_max_uninterrupted_length_between_gaps]+1
-index_end_nogap_region=index_time_interval_gaps[index_max_uninterrupted_length_between_gaps+1]-1
-time_nogap_region=time[index_start_nogap_region:index_end_nogap_region]
-fflat_nogap_region=fflat[index_start_nogap_region:index_end_nogap_region]
-sig_nogap_region=sig[index_start_nogap_region:index_end_nogap_region]
+    max_uninterrupted_length_between_gaps=uninterrupted_length_between_gaps[index_uninterrupted_length_between_gaps_sorted[i]]
+    index_max_uninterrupted_length_between_gaps=index_uninterrupted_length_between_gaps_sorted[i]
+    index_start_nogap_region=index_time_interval_gaps[index_max_uninterrupted_length_between_gaps]+1
+    index_end_nogap_region=index_time_interval_gaps[index_max_uninterrupted_length_between_gaps+1]-1
+    time_nogap_region=time[index_start_nogap_region:index_end_nogap_region]
+    fflat_nogap_region=fflat[index_start_nogap_region:index_end_nogap_region]
+    sig_nogap_region=sig[index_start_nogap_region:index_end_nogap_region]
 ;;=============================================================================
 ;;2.4.2 Run the FFT on the non-gappy data
 ;;=============================================================================
-npoints=n_elements(time_nogap_region)
-delta=median( shift(reform(time_nogap_region),-1)-reform(time_nogap_region) )
+    npoints=n_elements(time_nogap_region)
+    delta=median( shift(reform(time_nogap_region),-1)-reform(time_nogap_region) )
 ;t=time
 ;;g_t_anal=fflat_nogap_region
 ;;print,'***DEBUG:  inserting a fake sine signal to see if the FFT picks it up cleanly'
-g_t_anal=fflat_nogap_region ;;*sin(4.*!DPI*time_nogap_region)
+    g_t_anal=fflat_nogap_region ;;*sin(4.*!DPI*time_nogap_region)
 ;;2.4.2.1 Use a sigma clip to filter out any transits...
 ;;sigma_g_t_anal=robust_sigma(g_t_anal)
 ;;
-u=lindgen(npoints)
-f=(((u+npoints/2) mod npoints) -(npoints/2))/(delta*npoints)
-g_f_fft=npoints*delta*fft(g_t_anal)
-if keyword_set(do_screen_plotting) then begin
-    !p.multi=[0,1,2]
-    plot,time_nogap_region,g_t_anal,/ys,xtitle='Time (d)',ytitle='Relative flux',title=kid
+    u=lindgen(npoints)
+    f=(((u+npoints/2) mod npoints) -(npoints/2))/(delta*npoints)
+    g_f_fft=npoints*delta*fft(g_t_anal)
     index_positive_frequency = where(f ge 0)
-    plot,f[index_positive_frequency],abs(g_f_fft[index_positive_frequency]),psym=-4,xtitle='freq (cycles/day)',ytitle='power',title='power spectrum',xrange=[0,max(f)],/xs,/ylog
-    !p.multi=[0,1,1]
+    f_pos=f[index_positive_frequency]
+    g_f_fft_pos=abs(g_f_fft[index_positive_frequency])
+    if keyword_set(do_screen_plotting) then begin
+        !p.multi=[0,1,2]
+        plot,time_nogap_region,g_t_anal,/ys,xtitle='Time (d)',ytitle='Relative flux',title=kid
+        plot,f_pos,g_f_fft_pos,psym=-4,xtitle='freq (cycles/day)',ytitle='power',title='power spectrum',xrange=[0,max(f)],/xs,/ylog
+        !p.multi=[0,1,1]
 ;om=(((u+npoints/2) mod npoints) -(npoints/2))/(delta*npoints)
 ;scargle,t,g_t_anal,om,px
-    stop
-    wait,1
-endif
+;    stop
+        wait,1
+    endif
+;;=============================================================================
+;;2.4.3 Select frequency with the highest power (ignoring the zero frequency)
+;;=============================================================================
+    f_pos_nozero=f_pos[1:n_elements(f_pos)-1]
+    g_f_fft_pos_nozero=g_f_fft_pos[1:n_elements(f_pos)-1]
+    dummy=max(g_f_fft_pos_nozero,index_peak_frequency)
+    peak_period=1.0/f_pos_nozero[index_peak_frequency]
+;;=============================================================================
+;;3.3 Set up 'window' before & after transit for fitting polynomial:
+;;=============================================================================
+;window=1d0
+    time_nogap_region_range=max(time_nogap_region) - min(time_nogap_region)
+;print,'******',(time_nogap_region_range-max(tdur))/2.0
+;print,'******',peak_period/2.0
+    window=min([ (time_nogap_region_range-max(tdur))/2.0 ,peak_period/2.0])
+    single_fit_time_baseline=max(tdur)+2.0*window
+    index_start_nogap_region_trimmed=index_start_nogap_region
+    dummy=min(abs(time-time[index_start_nogap_region]-single_fit_time_baseline),index_end_nogap_region_trimmed)
+    time_nogap_region_trimmed=time[index_start_nogap_region_trimmed:index_end_nogap_region_trimmed]
+    fflat_nogap_region_trimmed=fflat[index_start_nogap_region_trimmed:index_end_nogap_region_trimmed]
+    sig_nogap_region_trimmed=sig[index_start_nogap_region_trimmed:index_end_nogap_region_trimmed]
+    time_nogap_region_trimmed=( (time_nogap_region_trimmed-min(time_nogap_region_trimmed)) / (max(time_nogap_region_trimmed)-min(time_nogap_region_trimmed)) )
 ;;=============================================================================
 ;;2.5  Set up the polynomial detrending order
 ;;=============================================================================
-;window_size=summary_of_fft_periods
-;ord=calc_best_poly_deg_using_bic( $
-;                                  data_x=time_nogap_region, $
-;                                  data_y=fflat_nogap_region, $
-;                                  data_err_y=sig_nogap_region, $
-;                                  max_trial_poly_deg=12L $
-;                                )
-ord=2
+    bic_chosen_polynomial_orders[i]=calc_best_poly_deg_using_bic( $
+                                      data_x=time_nogap_region_trimmed, $
+                                      data_y=fflat_nogap_region_trimmed, $
+                                      data_err_y=sig_nogap_region_trimmed, $
+                                      plot_to_screen=1, $
+                                      max_trial_poly_deg=20L $
+                                    )
+;    stop
+endfor
+;;=============================================================================
+;;2.6 Pick the median of all the choices of polynomial order to
+;;proceed with (other choices to explore are the mode, or the maximum;
+;;the maximum would be susceptible to outliers).
+;;=============================================================================
+ord=long(median(bic_chosen_polynomial_orders))
+print,'Selected polynomial detrending order = '+strtrim(string(ord),2)
+n_hist_bic_choices=histogram(bic_chosen_polynomial_orders,location=bic_choices)
+plot,$
+  bic_choices,$
+  n_hist_bic_choices,$
+  psym=10,$
+  xtitle='BIC-selected poly order',$
+  ytitle='N',$
+  title='Distribution of polynomial orders selected by BIC for various segments'
+oplot,$
+  [ord,ord],$
+  [-99999,99999],$
+  color=255
+xyouts,0.7,0.7,'Order selected: '+strtrim(string(ord),2),/normal,charsize=2
 ;stop
 ;;=============================================================================
 ;;Resume Eric's unmodified code
@@ -129,19 +198,7 @@ ord=2
 fsap=fflat
 ssap=sig
 ;;=============================================================================
-;;3.1 Baseline 'window' before & after transit for fitting polynomial:
-;;=============================================================================
-window=1d0
-;;=============================================================================
-;;3.2 Range of depths of the transit to search over:
-;;=============================================================================
-depth=[0d0,3.2d-5,4d-5,5d-5,6.4d-5,8d-5,.000100,.000128,.000160,.000200,.000256,.000320,.000400,.000512,.000640,.000800,.001000,.01,.024]
-;depth=[0d0,.001,.024]
-tdur=[1d0,1.25,1.5,1.75,2d0,2.5,3d0,3.5,4d0,4.5d0,5d0,5.5d0,6d0,6.5,7d0,7.5,8d0,8.5,9d0,9.5,10d0]/24d0
-ndepth=n_elements(depth)
-ndur=n_elements(tdur)
-;;=============================================================================
-;;3.3 Find temporal gaps in data taking:
+;;3.4 Find temporal gaps in data taking:
 ;;=============================================================================
 nt=n_elements(time)
 gap=where((shift(reform(time),-1)-reform(time)) gt 0.5d0)
@@ -303,7 +360,16 @@ for iseg=0,nseg-1 do begin
 ;;loop looks like it has side effects on the window of data to fit to.
 ;;=============================================================================
                 flux=fsap[indx]
-                coeff0=poly_fit(ttmp,flux,ord,/double,measure_errors=ssap[indx],chisq=chi0,yfit=yfit0)
+;                coeff0=poly_fit(ttmp,flux,ord,/double,measure_errors=ssap[indx],chisq=chi0,yfit=yfit0)
+                coeff0=calc_polyfit_regress( $
+                                             data_x=ttmp, $
+                                             data_y=flux, $
+                                             measure_errors=ssap[indx], $
+                                             poly_order=ord, $
+                                             chisq=chi0, $
+                                             yfit=yfit0, $
+                                             plot_to_screen=0 $
+                                           )
 ;;=============================================================================
 ;;6.2.1.2.2.1 Recalculate the chi-squared for the polynomial+step fit, when confined to this window
 ;;=============================================================================
@@ -326,7 +392,16 @@ for iseg=0,nseg-1 do begin
                 for idepth=0,ndepth-1 do begin
                     model=1d0-depth[idepth]*((time[indx] ge time[itime]) and (time[indx] le (time[itime]+tdur[idur])))
                     flux_model=fsap[indx]/model
-                    coeff=poly_fit(ttmp,flux_model,ord,/double,measure_errors=ssap[indx],chisq=chi,yfit=yfit)
+;                    coeff=poly_fit(ttmp,flux_model,ord,/double,measure_errors=ssap[indx],chisq=chi,yfit=yfit)
+                    coeff=calc_polyfit_regress( $
+                                                data_x=ttmp, $
+                                                data_y=flux_model, $
+                                                measure_errors=ssap[indx], $
+                                                poly_order=ord, $
+                                                chisq=chi, $
+                                                yfit=yfit, $
+                                                plot_to_screen=0 $
+                                              )
                     ;;Save chisq results for later analysis
                     chisq_array_poly[idepth,idur,itime]=chi0
                     chisq_array_polypulse[idepth,idur,itime]=chi
@@ -378,6 +453,7 @@ for iseg=0,nseg-1 do begin
         for idepth=1,ndepth-1 do chisq_array[idepth,idur,i1:i2]= chisq_array[idepth,idur,i1:i2]/median(resid)^2
     endfor
 endfor
+err_flux=db_err_flux
 save, $
   chisq_array, $
 ;  chisq_array_poly, $
@@ -392,6 +468,7 @@ depth, $
   fsap, $
   ssap, $
   mask, $
+  err_flux, $
   filename=working_dir+'depth_distribution.sav'
 spawn,'touch '+working_dir+fit_transit_donefile_name
 ;save,/all,filename='depth_distribution'+kid+'.sav'

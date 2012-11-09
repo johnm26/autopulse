@@ -228,16 +228,18 @@ FUNCTION quick_qats,d,DeltaMin,DeltaMax,q,indices
 ;         print,icountdebug,mm,mu,a-1
 ;     endif else begin
          mm = maxgammaN(G,mu,DeltaMin,DeltaMax,q,N,index=mu)
-         print,icountdebug,mm,mu,a-1
+;         print,icountdebug,mm,mu,a-1
 ;     endelse
      mus = [mus,mu]
+;     print,icountdebug
   endwhile
-stop
+
   M = n_elements(mus)-1
 
   indices = lindgen(M)
 
-  for mm = 1, M,1 do indices(mm-1) = mus[M-mm]
+  for i_mm = 1, M,1 do indices(i_mm-1) = mus[M-i_mm]
   
+;stop
   return, GMax/sqrt(1.0*M*q)
 end
