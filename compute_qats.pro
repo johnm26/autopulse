@@ -211,14 +211,14 @@ for ikid=0,nkid-1 do begin
                 printf,1,ncadence,f,q,pmin,pmax,flag
                 for i=0L,ncadence-1L do printf,1,timetotal[i],ftotal[i],sigma
                 close,1
-;print,systime(/UTC)+'|Starting FORTRAN version of test_qpt...'
-;                spawn,'\cp -f '+common_data_root_dir+'test_qpt '+working_dir
-;                spawn,working_dir+'test_qpt'
-;print,systime(/UTC)+'|...finished FORTRAN version of test_qpt.'
-print,systime(/UTC)+'|Starting FORTRAN version of run_quick_qats...'
-                spawn,'\cp -f '+common_data_root_dir+'run_quick_qats '+working_dir
-                spawn,working_dir+'run_quick_qats'
-print,systime(/UTC)+'|...finished FORTRAN version of run_quick_qats.'
+print,systime(/UTC)+'|Starting FORTRAN version of test_qpt...'
+                spawn,'\cp -f '+common_data_root_dir+'test_qpt '+working_dir
+                spawn,working_dir+'test_qpt'
+print,systime(/UTC)+'|...finished FORTRAN version of test_qpt.'
+;print,systime(/UTC)+'|Starting FORTRAN version of run_quick_qats...'
+;                spawn,'\cp -f '+common_data_root_dir+'run_quick_qats '+working_dir
+;                spawn,working_dir+'run_quick_qats'
+;print,systime(/UTC)+'|...finished FORTRAN version of run_quick_qats.'
 ;stop
 ;print,systime(/UTC)+'|Starting IDL QUICK_QATS version of test_qpt...'
 ;                 status=test_qpt( $
