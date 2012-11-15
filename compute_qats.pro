@@ -1,15 +1,16 @@
 ; For a given KID, finds all of the files, unzips, detrends,
 ; runs QATS, saves & outputs spectrum:
-;; @example:  IDL>  compute_qats,1432214,0.005,[1.0,300.0],mask_planet=0,working_dir='/astro/net/astro-agol/blevlee/CODE/condor/test3/test_working_dir',common_data_root_dir='/astro/net/astro-agol/blevlee/CODE/IDL/KEPLER_REDUX/autopulse'
+;; @example:  IDL>  compute_qats,1432214,0.005,[1.0,300.0],mask_planet=0,working_dir='/astro/net/astro-agol/blevlee/CODE/condor/test3/test_working_dir/',common_data_root_dir='/astro/net/astro-agol/blevlee/CODE/IDL/KEPLER_REDUX/autopulse/'
 pro compute_qats, $
                   kid0, $
                   f, $
                   prange, $
                   mask_planet=mask_planet, $
                   working_dir=working_dir, $
-                  common_data_root_dir=common_data_root_dir
+                  common_data_root_dir=common_data_root_dir, $
+                  kid_fits_filenames=kid_fits_filenames
 ;1.  Set up internal variables
-do_read_lightcurve_from_local_fitsfile_orig=0
+do_read_lightcurve_from_local_fitsfile_orig=1
 if keyword_set(mask_planet) then begin
     do_make_planetmask_master_orig=1
 endif else begin
@@ -76,9 +77,11 @@ for ikid=0,nkid-1 do begin
         do_make_planetmask=do_make_planetmask_master_orig
     endif else begin
         print,'Ephemeris file did not contain KID ',kid0[ikid],indx
-        print,'Therefore must read data from database.  No local file reading permitted.'
-        do_read_lightcurve_from_local_fitsfile=0
+;        print,'Therefore must read data from database.  No local file reading permitted.'
+;        do_read_lightcurve_from_local_fitsfile=0
+        print,'Attempting to do local fits file read anyways......'
         do_make_planetmask=0
+        do_read_lightcurve_from_local_fitsfile=do_read_lightcurve_from_local_fitsfile_orig
     endelse
 ;2.1 Check whether fit_transit previously finished and saved its work
 ;here.  If it is already accomplished, we can skip ahead.
@@ -86,7 +89,7 @@ for ikid=0,nkid-1 do begin
     if file_test(working_dir+fit_transit_donefile_name) then spawn,'ls '+working_dir+'depth_distribution.sav',result
     if(result eq '') then begin
 ;2.2 By default, read from Kepler SQL database (but don't do it if the
-;local reading keyword is set)
+;local reading keyword is set)        
         if ~keyword_set(do_read_lightcurve_from_local_fitsfile) then begin
 
 ;;;2.3 Clean up old temporary files
@@ -177,7 +180,8 @@ for ikid=0,nkid-1 do begin
           do_read_lightcurve_from_local_fitsfile=do_read_lightcurve_from_local_fitsfile, $
           working_dir=working_dir, $
           common_data_root_dir=common_data_root_dir, $
-          fit_transit_donefile_name=fit_transit_donefile_name
+          fit_transit_donefile_name=fit_transit_donefile_name, $
+          kid_fits_filenames=kid_fits_filenames
     endif
 
     restore,working_dir+'depth_distribution.sav'
@@ -189,7 +193,8 @@ for ikid=0,nkid-1 do begin
     ncadence=long(round((max(time)-min(time))/gap0) +1L) & sigma=1d-4
     cadence=round((time-min(time))/gap0)
     timetotal=min(time)+(max(time)-min(time))*dindgen(ncadence)/double(ncadence-1L)
-    sntot=dblarr(4,ndepth,ndur,nperiod)
+;    sntot=dblarr(4,ndepth,ndur,nperiod)
+	sntrim = dblarr(ndepth,ndur,nperiod)
     chisq_rat_max=0d0
     chisq_diff_max=0d0
     set_plot,'ps'
@@ -239,13 +244,14 @@ print,systime(/UTC)+'|...finished FORTRAN version of test_qpt.'
                 readcol,working_dir+'qats_spectrum.txt',tminnew,tmaxnew,mmnew,qnew,smaxnew,mbestnew,/silent
                 pgrid=(tminnew+tmaxnew)*.5d0*gap0
                 ngrid=n_elements(smaxnew)
-                sntot[0,idepth,iq,0:ngrid-1]=pgrid
-                sntot[1,idepth,iq,0:ngrid-1]=smaxnew
+;                sntot[0,idepth,iq,0:ngrid-1]=pgrid
+;                sntot[1,idepth,iq,0:ngrid-1]=smaxnew
+				sntrim[idepth,iq,0:ngrid-1]=smaxnew
                 coeff=robust_poly_fit(alog10(pgrid),median(alog10(smaxnew),10),5)
                 chisq_rat=smaxnew/10.^poly(alog10(pgrid),coeff)
                 chisq_diff=smaxnew-10.^poly(alog10(pgrid),coeff)
-                sntot[2,idepth,iq,0:ngrid-1]=chisq_rat
-                sntot[3,idepth,iq,0:ngrid-1]=chisq_diff
+;                sntot[2,idepth,iq,0:ngrid-1]=chisq_rat
+;                sntot[3,idepth,iq,0:ngrid-1]=chisq_diff
                 !p.multi=[0,1,3]
                 i0=where(chisq_rat eq max(chisq_rat))
                 if(max(chisq_rat) gt chisq_rat_max and max(chisq_diff[i0]) gt chisq_diff_max) then begin
@@ -309,16 +315,29 @@ print,systime(/UTC)+'|...finished FORTRAN version of test_qpt.'
     endfor
     cd,current_dir
     device,/close
-    save,time,fsap,f,sntot,pmin,pmax,depth,ndepth,tdur,ndur,ephem,tt,datamax,filename=working_dir+'qats_depth_dur_'+kids+'.sav'
-    spawn,'mv '+working_dir+'depth_distribution.sav '+working_dir+'depth_distribution_'+kids+'.sav'
+;    save,time,fsap,f,sntot,pmin,pmax,depth,ndepth,tdur,ndur,ephem,tt,datamax,filename=working_dir+'qats_depth_dur_'+kids+'.sav'
+
+	OpenW,lun,working_dir+'qats_trim.txt',/get_lun
+	for i=0,ndepth-1 do begin
+		for j=0,ndur-1 do begin
+			printf,lun,sntrim[i,j,0:nperiod-1],FORMAT='(2290(F,x))'
+		endfor
+	endfor
+	Close,lun
+        free_lun,lun
+;    spawn,'mv '+working_dir+'depth_distribution.sav '+working_dir+'depth_distribution_'+kids+'.sav'
     print,'Finished'
     cd,current_dir
 ;        c=get_kbrd(1)
 ; Now, re-gzip these files:
 ;    readcol,'fits_list.txt',fname,format='a'
 ;    for i=0,n_elements(fname)-1 do spawn,'gzip '+fname[i]
-    spawn,'gzip '+working_dir+'depth_distribution_'+kids+'.sav'
-    spawn,'gzip '+working_dir+'kid'+kids+'_qats.ps'
+;    spawn,'gzip '+working_dir+'depth_distribution_'+kids+'.sav'
+;    spawn,'gzip '+working_dir+'kid'+kids+'_qats.ps'
+	spawn,'python '+common_data_root_dir+'input_txt_to_db.py '+working_dir+'qats_trim.txt '+kids
+	spawn,'rm '+working_dir+'qats_trim.txt'
+	spawn,'rm '+working_dir+'depth_distribution.sav'
+	spawn,'rm '+working_dir+'kid'+kids+'_qats.ps'
     spawn,'touch '+working_dir+'donefile'
 endfor
 return
