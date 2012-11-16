@@ -13,7 +13,8 @@ pro fit_transit, $
                  do_read_lightcurve_from_local_fitsfile=do_read_lightcurve_from_local_fitsfile, $
                  working_dir=working_dir, $
                  common_data_root_dir=common_data_root_dir, $
-                 fit_transit_donefile_name=fit_transit_donefile_name
+                 fit_transit_donefile_name=fit_transit_donefile_name, $
+                 kid_fits_filenames=kid_fits_filenames
 ; 8/23/2012 This routine fits a transit light curve with a box-car
 ; transit shape of a specified depth (multiplied by a polynomial).  
 ; A delta-chi-square is computed relative to a fit with a single
@@ -41,8 +42,12 @@ ndur=n_elements(tdur)
 ;;2.1  Reading data from fits files
 ;;=============================================================================
 if keyword_set(do_read_lightcurve_from_local_fitsfile) then begin
-@read_data
+    @read_data
     time=time-55000d0
+    time=double(time)
+    fflat=double(fflat)
+    sig=double(sig)
+    db_err_flux=sig
 endif else begin
 ;;=============================================================================
 ;;2.2  Applying CBV's to SQL database light curves

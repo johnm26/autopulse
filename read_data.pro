@@ -1,5 +1,7 @@
-readcol,'fits_list.txt',fname,format='a'
+;readcol,'fits_list.txt',fname,format='a'
+fname=kid_fits_filenames
 nfile=n_elements(fname)
+is_first_valid_quarter=1
 for iname=0,nfile-1 do begin
   fits_read,fname[iname],tab,htab,exten=1
   channel=fxpar(htab,'CHANNEL')
@@ -7,24 +9,54 @@ print,'******channel******',channel
   quarter=fxpar(htab,'QUARTER')
   print,fxpar(htab,'MODULE'),fxpar(htab,'OUTPUT')
   cbv_read,quarter,channel,cbv
-  if(iname eq 0) then vec1=cbv.vector_1 else vec1=[vec1,cbv.vector_1]
-  if(iname eq 0) then vec2=cbv.vector_2 else vec2=[vec2,cbv.vector_2]
-  if(iname eq 0) then vec3=cbv.vector_3 else vec3=[vec3,cbv.vector_3]
-  if(iname eq 0) then vec4=cbv.vector_4 else vec4=[vec4,cbv.vector_4]
-  if(iname eq 0) then vec5=cbv.vector_5 else vec5=[vec5,cbv.vector_5]
-  if(iname eq 0) then vec6=cbv.vector_6 else vec6=[vec6,cbv.vector_6]
-  if(iname eq 0) then vec7=cbv.vector_7 else vec7=[vec7,cbv.vector_7]
-  if(iname eq 0) then vec8=cbv.vector_8 else vec8=[vec8,cbv.vector_8]
-  if(iname eq 0) then qtr=intarr(n_elements(vec1))+quarter else qtr=[qtr,intarr(n_elements(cbv.vector_1))+quarter]
-  if(iname eq 0) then time=tbget(htab,tab,'TIME') else time=[time,tbget(htab,tab,'TIME')]
-  ftmp=tbget(htab,tab,'SAP_FLUX')
-  if(iname eq 0) then fcor=ftmp/median(ftmp) else fcor=[fcor,ftmp/median(ftmp)]
-  stmp=tbget(htab,tab,'SAP_FLUX_ERR')
-  inan=where(finite(stmp) eq 0)
-  if(inan[0] eq 0) then stmp[inan]=median(stmp[where(finite(stmp) eq 1)])
-  if(iname eq 0) then sig=stmp/median(ftmp) else sig=[sig,stmp/median(ftmp)]
-  cadencetmp=tbget(htab,tab,'CADENCENO')
-  if(iname eq 0) then cadence=cadencetmp else cadence=[cadence,cadencetmp]
+  if size(cbv,/type) ne 8 then begin
+      err_msg = SYSTIME(/UTC) + "|WARN|read_data.pro|No CBV data was available for quarter="+string(quarter)+", channel="+string(channel)+", so we are excluding this segment of light curve."
+      PRINT, err_msg
+  endif else begin
+;;3.3  Concatenate each quarter's values together
+;;3.3.1  Initialize the concatenation with the first available quarter
+      if is_first_valid_quarter then begin
+          vec1=cbv.vector_1
+          vec2=cbv.vector_2
+          vec3=cbv.vector_3
+          vec4=cbv.vector_4
+          vec5=cbv.vector_5
+          vec6=cbv.vector_6
+          vec7=cbv.vector_7
+          vec8=cbv.vector_8
+          qtr=intarr(n_elements(vec1))+quarter
+          time=tbget(htab,tab,'TIME')
+          ftmp=tbget(htab,tab,'SAP_FLUX')
+          fcor=ftmp/median(ftmp)
+          stmp=tbget(htab,tab,'SAP_FLUX_ERR')
+          inan=where(finite(stmp) eq 0)
+          if(inan[0] eq 0) then stmp[inan]=median(stmp[where(finite(stmp) eq 1)])
+          sig=stmp/median(ftmp)
+          cadencetmp=tbget(htab,tab,'CADENCENO')
+          cadence=cadencetmp
+          is_first_valid_quarter=0
+;;3.3.2  Continue the concatenation by joining on to the previous quarters
+      endif else begin
+          vec1=[vec1,cbv.vector_1]
+          vec2=[vec2,cbv.vector_2]
+          vec3=[vec3,cbv.vector_3]
+          vec4=[vec4,cbv.vector_4]
+          vec5=[vec5,cbv.vector_5]
+          vec6=[vec6,cbv.vector_6]
+          vec7=[vec7,cbv.vector_7]
+          vec8=[vec8,cbv.vector_8]
+          qtr=[qtr,intarr(n_elements(cbv.vector_1))+quarter]
+          time=[time,tbget(htab,tab,'TIME')]
+          ftmp=tbget(htab,tab,'SAP_FLUX')
+          fcor=[fcor,ftmp/median(ftmp)]
+          stmp=tbget(htab,tab,'SAP_FLUX_ERR')
+          inan=where(finite(stmp) eq 0)
+          if(inan[0] eq 0) then stmp[inan]=median(stmp[where(finite(stmp) eq 1)])
+          sig=[sig,stmp/median(ftmp)]
+          cadencetmp=tbget(htab,tab,'CADENCENO')
+          cadence=[cadence,cadencetmp]
+      endelse
+  endelse
 endfor
 help,fcor
 ;stop
@@ -61,4 +93,4 @@ for iqtr=1,12 do begin
 ;  oplot,time[jqtr]-55000d0,fqtr/median(fqtr),psym=3,col=255 & char=get_kbrd(1)
   endif
 endfor
-plot,time-54900d0,fflat,ys=1,psym=3
+;plot,time-54900d0,fflat,ys=1,psym=3

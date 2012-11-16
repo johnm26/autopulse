@@ -14,7 +14,8 @@ fname=[$
 'kplr2011177032512-q09-d12_lcbv.fits',$
 'kplr2011271113734-q10-d13_lcbv.fits',$
 'kplr2012004120508-q11-d15_lcbv.fits',$
-'kplr2012088054726-q12-d17_lcbv.fits']
+'kplr2012088054726-q12-d17_lcbv.fits',$
+'kplr2012179063303-q13-d18_lcbv.fits']
 cbv=mrdfits(path+fname[quarter],channel,h)
 print,fxpar(h,'EXTNAME')
 return
