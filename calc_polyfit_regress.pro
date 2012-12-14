@@ -123,7 +123,8 @@ independent_matrix=transpose([[poly_basis_matrix]])
 ;;=============================================================================
 ;;3.  Do a least-squares fit for the polynomial order 
 ;;=============================================================================
-coeff=regress(independent_matrix,data_y,const=c0,measure_errors=measure_errors,/DOUBLE)
+status=1
+coeff=regress(independent_matrix,data_y,const=c0,measure_errors=measure_errors,/DOUBLE,status=status)
 ;;=============================================================================
 ;;3.1  Evaluate the sum of the coeffs*basis vectors
 ;;=============================================================================

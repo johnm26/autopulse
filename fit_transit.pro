@@ -304,6 +304,8 @@ chisq_array_poly=dblarr(ndepth,ndur,nt)
 chisq_array_polypulse=dblarr(ndepth,ndur,nt)
 chisq_array_polystep=dblarr(ndepth,ndur,nt)
 size_array=intarr(ndur,nt)
+;sigma will be passed to compute_qats to be used for expected signal strength calculation
+sigma_array_polypulse = dblarr(ndepth,ndur,nt)
 ;should I use the same order over the whole lc, or should we attempt
 ;to evaluate locally?
 ;ord=2
@@ -427,6 +429,11 @@ for iseg=0,nseg-1 do begin
                             chisq_array[idepth,idur,itime]=chi_stepfit-chi
                         endelse
                     endelse
+                    ;;Calculate sigma_array_polypulse to be passed to compute_qats
+                    diff_y=flux_model-yfit
+                    sorted_window=diff_y[sort(diff_y)]
+                    npts=n_elements(sorted_window)
+                    sigma_array_polypulse[idepth,idur,itime]=(sorted_window[0.8415*npts]-sorted_window[0.1585*npts])/2.
 ;print,idepth,idur,itime,chisq_array[idepth,idur,itime]
 ;+Debug plotting
                                 ;if(chi0-chi gt 20d0) then begin
@@ -474,6 +481,7 @@ depth, $
   ssap, $
   mask, $
   err_flux, $
+  sigma_array_polypulse, $
   filename=working_dir+'depth_distribution.sav'
 spawn,'touch '+working_dir+fit_transit_donefile_name
 ;save,/all,filename='depth_distribution'+kid+'.sav'
