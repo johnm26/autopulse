@@ -77,7 +77,7 @@ weight=1d0/sig^2
 ntime=n_elements(time)
 fflat=fcor
 correction=fcor
-for iqtr=1,12 do begin
+for iqtr=min(qtr),max(qtr) do begin
   jqtr=where(qtr eq iqtr)
   if(jqtr[0] ge 0) then begin
     fqtr=fcor[jqtr]
