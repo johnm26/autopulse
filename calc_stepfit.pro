@@ -140,7 +140,7 @@ for idata_x=0L,data_x_length-1 do begin
 ;;3.3  For each tested step position, do a least-squares fit for the
 ;;depth and offset of the step, and the polynomial order
 ;;=============================================================================
-    coeff=regress(independent_matrix,data_y,const=c0,measure_errors=measure_errors,/DOUBLE)
+    coeff=regress(independent_matrix,data_y,const=c0,measure_errors=measure_errors,/DOUBLE,status=status)
 ;;=============================================================================
 ;;3.4  Evaluate the sum of the coeffs*basis vectors
 ;;=============================================================================

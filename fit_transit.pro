@@ -433,7 +433,7 @@ for iseg=0,nseg-1 do begin
                     diff_y=flux_model-yfit
                     sorted_window=diff_y[sort(diff_y)]
                     npts=n_elements(sorted_window)
-                    sigma_array_polypulse[idepth,idur,itime]=(sorted_window[0.8415*npts]-sorted_window[0.1585*npts])/2.
+                    sigma_array_polypulse[idepth,idur,itime]=(sorted_window[long(0.8415*npts)]-sorted_window[long(0.1585*npts)])/2.
 ;print,idepth,idur,itime,chisq_array[idepth,idur,itime]
 ;+Debug plotting
                                 ;if(chi0-chi gt 20d0) then begin

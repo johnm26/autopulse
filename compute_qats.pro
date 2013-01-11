@@ -169,8 +169,7 @@ for ikid=0,nkid-1 do begin
                 PRINT, err_msg
                 PRINTF, log_lun, err_msg
                 stop
-            ENDI
-            ;stuff I'm adding, temporarily commented for testing other stuff first.F
+            ENDIF
         endif
 
 ;2.5 Run fit_transit on the parsed light curve 
@@ -204,7 +203,11 @@ for ikid=0,nkid-1 do begin
     cadence=round((time-min(time))/gap0)
     timetotal=min(time)+(max(time)-min(time))*dindgen(ncadence)/double(ncadence-1L)
 ;    sntot=dblarr(4,ndepth,ndur,nperiod)
+    expected_total_delta_chiSq = dblarr(ndepth,ndur)
+    peak_period = dblarr(ndepth,ndur)
+    peak_signal = dblarr(ndepth,ndur)
 	sntrim = dblarr(ndepth,ndur,nperiod)
+
     chisq_rat_max=0d0
     chisq_diff_max=0d0
     set_plot,'ps'
@@ -229,7 +232,7 @@ for ikid=0,nkid-1 do begin
 print,systime(/UTC)+'|Starting FORTRAN version of test_qpt...'
                 spawn,'\cp -f '+common_data_root_dir+'test_qpt '+working_dir
                 spawn,working_dir+'test_qpt'
-print,systime(/UTC)+'|...finished FORTRAN version of test_qpt.'
+                print,systime(/UTC)+'|...finished FORTRAN version of test_qpt.'
 ;print,systime(/UTC)+'|Starting FORTRAN version of run_quick_qats...'
 ;                spawn,'\cp -f '+common_data_root_dir+'run_quick_qats '+working_dir
 ;                spawn,working_dir+'run_quick_qats'
@@ -269,65 +272,88 @@ print,systime(/UTC)+'|...finished FORTRAN version of test_qpt.'
                     chisq_diff_max=chisq_diff[i0[0]]
                     datamax=[idepth,depth[idepth],iq,tdur[iq],pgrid[i0[0]],smaxnew[i0[0]]]
                 endif
-                ;stuff I'm adding, temporarily commented for testing other stuff first.
+
+                ;stuff Ben added:
+                ;Calculates expected signal of transits $
+                ;that match the peak signal for the given depth/duration.
+                ;Can compare to actual peak signal. if a match, maybe some verification?
                 openw,lun,working_dir+'lightcurve.in',/get_lun
-                printf,1,ncadence,f,q,long(tminnew[i0[0]]),long(tminnew[i0[0]]),flag
+                printf,lun,ncadence,f,q,long(tminnew[i0[0]]),long(tminnew[i0[0]]),flag
                 for i=0L,ncadence-1L do printf,lun,timetotal[i],ftotal[i],sigma
                 close,lun
-                    free,lun
+                    free_lun,lun
                 spawn,working_dir+'test_qpt'
-                readcol,working_dir+'transit_times.txt',ntt,format='l'
+                readcol,working_dir+'transit_times.txt',start_of_transit_cadences,format='l'
+                start_of_transit_times = timetotal[start_of_transit_cadences]
+                expected_total_delta_chiSq[idepth,iq] = 0.0
+                peak_period[idepth,iq] = tminnew[i0[0]]*gap0
+                peak_signal[idepth,iq] = smaxnew[i0[0]]
+                for i=0,n_elements(start_of_transit_cadences)-1 do begin
+                    in_transit_cadences = where((time ge start_of_transit_times[i]) and (time le start_of_transit_times[i]+tdur[iq]))
+                    if in_transit_cadences[0] eq -1 then begin
+                        expected_transit_delta_chiSq=0.0
+                    endif else begin
+                        expected_transit_delta_chiSq=0.0
+                        for j=0,n_elements(in_transit_cadences)-1 do begin
+                            if sigma_array_polypulse[idepth,iq,in_transit_cadences[j]] ne 0.0 then begin
+                                expected_transit_delta_chiSq += depth[idepth]*depth[idepth]/sigma_array_polypulse[idepth,iq,in_transit_cadences[j]]^2.
+                            endif
+                        endfor
+                    endelse
+                    expected_total_delta_chiSq[idepth,iq] += expected_transit_delta_chiSq
+                endfor
 
-;getting rid of this stuff because the new cut involves comparing the delta chi squared of the peak to the expected value
-                if(smaxnew[i0[0]] gt 40d0 and chisq_diff[i0[0]] gt 10d0) then begin
-                    plot,pgrid,chisq_rat,/xl
-                    print,idepth,depth[idepth],iq,tdur[iq],pgrid[i0[0]],smaxnew[i0[0]],chisq_rat[i0[0]],chisq_diff[i0[0]]
-                    openw,1,working_dir+'lightcurve.in'
-                    printf,1,ncadence,f,q,long(tminnew[i0[0]]),long(tminnew[i0[0]]),flag
-                    for i=0L,ncadence-1L do printf,1,timetotal[i],ftotal[i],sigma
-                    close,1
-                    spawn,working_dir+'test_qpt'
-                    readcol,working_dir+'transit_times.txt',ntt,format='l'
-                    tt=timetotal[ntt]
-                    ephem=poly_fit(dindgen(n_elements(ntt)),tt,1,/double)
-                    print,ephem,tt,ftotal[ntt],stddev(tt-ephem[0]-ephem[1]*dindgen(n_elements(ntt))),stddev(ftotal(ntt))^2/mean(ftotal(ntt))
-;        c=get_kbrd(1)
-;          wait,.005
-                    plot,time-tt[0],chisq_array[idepth,iq,*],xr=[-2,2],yr=[0,max(chisq_array[idepth,iq,*])]
-                    for i=1,n_elements(ntt)-1 do oplot,time-tt[i],chisq_array[idepth,iq,*]
-;        c=get_kbrd(1)
-;        wait,.005
-                    is_first_plot=1
-                    for i=0,n_elements(ntt)-1 do begin
-                        iin=where(abs(time-tt[i]) lt 2d0,count_in_transit)
-;;if(iin[0] ge 0) then 
-                        if count_in_transit gt 0 then begin
-                            if is_first_plot eq 1 then begin
-                                y_plot_halfheight=max([3.0*depth[idepth],median(err_flux)])
-                                plot, $
-                                  time-tt[i],$
-                                  fsap/median(fsap[iin]), $
-                                  ys=1, $
-                                  xr=[-1,1], $
-                                  psym=6, $
-                                  symsize=0.25, $
-                                  thick=2, $
-                                  yr=[1.0-y_plot_halfheight,1.0+y_plot_halfheight], $ ;[.999,1.001], $
-                                  tit='Depth= '+string(depth[idepth]*1d6,format='(f8.1)')+ $
-                                  ' ppm; Duration= '+string(tdur[iq]*24d0,format='(f6.1)')+ $
-                                  ' hr; f= '+string(f,format='(f6.3)')+ $
-                                  '; t0= '+string(ephem[0],format='(f10.5)')+ $
-                                  '; Period= '+string(ephem[1],format='(f10.5)')
-                                is_first_plot=0
-                            endif else begin
-                                oplot,time-tt[i],fsap/median(fsap[iin]),psym=6,symsize=0.25,thick=2
-                            endelse
-                        endif
-                    endfor
-                endif
-;        c=get_kbrd(1)
-;        wait,.005
-;        endif
+;will be getting rid of this stuff because the new cut involves comparing the delta chi squared of the peak to the expected value
+;more than one ; means the line was already commented out
+;                if(smaxnew[i0[0]] gt 40d0 and chisq_diff[i0[0]] gt 10d0) then begin
+;                    plot,pgrid,chisq_rat,/xl
+;                    print,idepth,depth[idepth],iq,tdur[iq],pgrid[i0[0]],smaxnew[i0[0]],chisq_rat[i0[0]],chisq_diff[i0[0]]
+;                    openw,1,working_dir+'lightcurve.in'
+;                    printf,1,ncadence,f,q,long(tminnew[i0[0]]),long(tminnew[i0[0]]),flag
+;                    for i=0L,ncadence-1L do printf,1,timetotal[i],ftotal[i],sigma
+;                    close,1
+;                    spawn,working_dir+'test_qpt'
+;                    readcol,working_dir+'transit_times.txt',ntt,format='l'
+;                    tt=timetotal[ntt]
+;                    ephem=poly_fit(dindgen(n_elements(ntt)),tt,1,/double)
+;                    print,ephem,tt,ftotal[ntt],stddev(tt-ephem[0]-ephem[1]*dindgen(n_elements(ntt))),stddev(ftotal(ntt))^2/mean(ftotal(ntt))
+;;        c=get_kbrd(1)
+;;         wait,.005
+;                    plot,time-tt[0],chisq_array[idepth,iq,*],xr=[-2,2],yr=[0,max(chisq_array[idepth,iq,*])]
+;                    for i=1,n_elements(ntt)-1 do oplot,time-tt[i],chisq_array[idepth,iq,*]
+;;        c=get_kbrd(1)
+;;        wait,.005
+;                    is_first_plot=1
+;                    for i=0,n_elements(ntt)-1 do begin
+;                        iin=where(abs(time-tt[i]) lt 2d0,count_in_transit)
+;;;if(iin[0] ge 0) then 
+;                        if count_in_transit gt 0 then begin
+;                            if is_first_plot eq 1 then begin
+;                                y_plot_halfheight=max([3.0*depth[idepth],median(err_flux)])
+;                                plot, $
+;                                  time-tt[i],$
+;                                  fsap/median(fsap[iin]), $
+;                                  ys=1, $
+;                                  xr=[-1,1], $
+;                                  psym=6, $
+;                                  symsize=0.25, $
+;                                  thick=2, $
+;                                  yr=[1.0-y_plot_halfheight,1.0+y_plot_halfheight], $ ;[.999,1.001], $
+;                                  tit='Depth= '+string(depth[idepth]*1d6,format='(f8.1)')+ $
+;                                  ' ppm; Duration= '+string(tdur[iq]*24d0,format='(f6.1)')+ $
+;                                  ' hr; f= '+string(f,format='(f6.3)')+ $
+;                                  '; t0= '+string(ephem[0],format='(f10.5)')+ $
+;                                  '; Period= '+string(ephem[1],format='(f10.5)')
+;                                is_first_plot=0
+;                            endif else begin
+;                                oplot,time-tt[i],fsap/median(fsap[iin]),psym=6,symsize=0.25,thick=2
+;                            endelse
+;                        endif
+;                    endfor
+;                endif
+;;        c=get_kbrd(1)
+;;        wait,.005
+;;        endif
             endif else begin
                 print,'|WARN|COMPUTE_QATS|No transit fits were deemed better than a systematics fit at this depth/duration combo. idepth:'+string(idepth)+' iq:'+string(iq)
             endelse
@@ -336,8 +362,16 @@ print,systime(/UTC)+'|...finished FORTRAN version of test_qpt.'
     cd,current_dir
     device,/close
 ;    save,time,fsap,f,sntot,pmin,pmax,depth,ndepth,tdur,ndur,ephem,tt,datamax,filename=working_dir+'qats_depth_dur_'+kids+'.sav'
-
-	OpenW,lun,working_dir+'qats_trim.txt',/get_lun
+    OpenW,lun,working_dir+'expected_vs_actual_qats_peaks.txt',/get_lun
+    printf,lun,'ndepth      ndur    peak_period  peak_signal  expected_peak_signal'
+    for i=0,ndepth-1 do begin
+        for j=0,ndur-1 do begin
+            printf,lun,i,j,peak_period[i,j],peak_signal[i,j],expected_total_delta_chiSq[i,j],FORMAT='(5(F10.3,x))'
+	    endfor
+    endfor
+    Close,lun
+        free_lun,lun
+    OpenW,lun,working_dir+'qats_trim.txt',/get_lun
 	for i=0,ndepth-1 do begin
 		for j=0,ndur-1 do begin
 			printf,lun,sntrim[i,j,0:nperiod-1],FORMAT='(2290(F10.3,x))'
