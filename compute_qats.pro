@@ -1,6 +1,8 @@
 ; For a given KID, finds all of the files, unzips, detrends,
 ; runs QATS, saves & outputs spectrum:
 ;; @example:  IDL>  compute_qats,1432214,0.005,[1.0,300.0],mask_planet=0,working_dir='/astro/net/astro-agol/blevlee/CODE/condor/test3/test_working_dir/',common_data_root_dir='/astro/net/astro-agol/blevlee/CODE/IDL/KEPLER_REDUX/autopulse/'
+;; @example2: IDL>  compute_qats,757076,0.005,[1.0,300.0],mask_planet=0,working_dir='/astro/store/student-scratch1/bvegaff/QATSruns/KOI_chiSq/test_new_data/output/007/00757076/read_db/',common_data_root_dir='/astro/users/bvegaff/testGit/autopulse/'
+
 pro compute_qats, $
                   kid0, $
                   f, $
@@ -8,7 +10,10 @@ pro compute_qats, $
                   mask_planet=mask_planet, $
                   working_dir=working_dir, $
                   common_data_root_dir=common_data_root_dir, $
-                  kid_fits_filenames=kid_fits_filenames
+                  kid_fits_filenames=kid_fits_filenames, $
+                  single_depth_dur=single_depth_dur, $
+                  mask_peak_transit_cadences=mask_peak_transit_cadences
+                  
 ;1.  Set up internal variables
 if keyword_set(kid_fits_filenames) then begin
     do_read_lightcurve_from_local_fitsfile_orig=1
@@ -76,7 +81,7 @@ for ikid=0,nkid-1 do begin
 ;    for i=0,n_elements(fnamegz)-1 do spawn,'gunzip '+fnamegz[i]
         spawn,'ls '+common_data_root_dir+'DATA/*'+kids+'*fits > fits_list.txt'
         pdot=dblarr(nplanet)
-        print,'Removing: ',KOI[indx],t0[indx],period[indx],tdur[indx]
+        print,'KOI info: ',KOI[indx],t0[indx],period[indx],tdur[indx]
         t0_curr=t0[indx]+54900d0
         period_curr=period[indx]
         pdot_curr=pdot
@@ -85,9 +90,9 @@ for ikid=0,nkid-1 do begin
         do_make_planetmask=do_make_planetmask_master_orig
     endif else begin
         print,'Ephemeris file did not contain KID ',kid0[ikid],indx
+        print,'planetmask was: ',do_make_planetmask_master_orig
 ;        print,'Therefore must read data from database.  No local file reading permitted.'
 ;        do_read_lightcurve_from_local_fitsfile=0
-        print,'Attempting to do local fits file read anyways......'
         do_make_planetmask=0
         do_read_lightcurve_from_local_fitsfile=do_read_lightcurve_from_local_fitsfile_orig
     endelse
@@ -98,9 +103,7 @@ for ikid=0,nkid-1 do begin
     if(result eq '') then begin
 ;2.2 By default, read from Kepler SQL database (but don't do it if the
 ;local reading keyword is set)
-        print,'debug1'
         if (do_read_lightcurve_from_local_fitsfile EQ 0) then begin
-        print,'debug2'
 ;;;2.3 Clean up old temporary files
 ;;        file_delete, $
 ;;          sql_macro_tmpfile_name, $
@@ -173,7 +176,7 @@ for ikid=0,nkid-1 do begin
         endif
 
 ;2.5 Run fit_transit on the parsed light curve 
-
+        temptime = systime(1);CHECKING TIME PER RUNNNNNNNNNNNN
         fit_transit, $
           kids, $
           t0=t0_curr, $
@@ -190,9 +193,13 @@ for ikid=0,nkid-1 do begin
           working_dir=working_dir, $
           common_data_root_dir=common_data_root_dir, $
           fit_transit_donefile_name=fit_transit_donefile_name, $
-          kid_fits_filenames=kid_fits_filenames
+          kid_fits_filenames=kid_fits_filenames, $
+          single_depth_dur=single_depth_dur, $
+          mask_peak_transit_cadences=mask_peak_transit_cadences
+        print,'time to run fit transit' + string(systime(1)-temptime) ;CHECKING RUN TIMMEEEEE
     endif
-
+    
+    temptime = systime(1)   ;CHECKING RUN TIMMEEEEE
     restore,working_dir+'depth_distribution.sav'
     chisq_array[where(chisq_array lt 0d0)]=0d0
     ntime=n_elements(time)
@@ -207,6 +214,12 @@ for ikid=0,nkid-1 do begin
     peak_period = dblarr(ndepth,ndur)
     peak_signal = dblarr(ndepth,ndur)
 	sntrim = dblarr(ndepth,ndur,nperiod)
+    total_calculated_signal = dblarr(ndepth,ndur)
+    good_transit_count = dblarr(ndepth,ndur)
+    max_dist_from_med = dblarr(ndepth,ndur)
+    frac_signal_from_max = dblarr(ndepth,ndur)
+    frac_signal_from_2 = dblarr(ndepth,ndur)
+    max_chisq_rat = dblarr(ndepth,ndur)
 
     chisq_rat_max=0d0
     chisq_diff_max=0d0
@@ -272,7 +285,20 @@ print,systime(/UTC)+'|Starting FORTRAN version of test_qpt...'
                     chisq_diff_max=chisq_diff[i0[0]]
                     datamax=[idepth,depth[idepth],iq,tdur[iq],pgrid[i0[0]],smaxnew[i0[0]]]
                 endif
-
+                max_chisq_rat[idepth,iq] = max(chisq_rat)
+                ;stuff Ben + Chris added:
+                ;Returns the cadences that are in the transit (of our peak QATS signal for the input depth and dur)
+                if keyword_set(single_depth_dur) then begin
+                    readcol,working_dir+'transit_times.txt',start_of_transit_cadences,format='l'
+                    start_of_transit_times = timetotal[start_of_transit_cadences]
+                    buffer_time = 0.5/24. ;half an hour, the buffer around our transit mask (we have duration uncertainty)
+                    in_transit_cadences = where((time ge start_of_transit_times[i]-buffer_time) and (time le start_of_transit_times[i]+tdur[iq]+buffer_time))
+                    openw,lun,working_dir+'transit_cadences.txt',/get_lun,/append
+                    printf,lun,in_transit_cadences
+                    close,lun
+                        free_lun,lun
+                endif
+                    
                 ;stuff Ben added:
                 ;Calculates expected signal of transits $
                 ;that match the peak signal for the given depth/duration.
@@ -288,7 +314,10 @@ print,systime(/UTC)+'|Starting FORTRAN version of test_qpt...'
                 expected_total_delta_chiSq[idepth,iq] = 0.0
                 peak_period[idepth,iq] = tminnew[i0[0]]*gap0
                 peak_signal[idepth,iq] = smaxnew[i0[0]]
+                transit_delta_chiSq = dblarr(n_elements(start_of_transit_cadences))
                 for i=0,n_elements(start_of_transit_cadences)-1 do begin
+
+                    ;Calculating expected transit signals
                     in_transit_cadences = where((time ge start_of_transit_times[i]) and (time le start_of_transit_times[i]+tdur[iq]))
                     if in_transit_cadences[0] eq -1 then begin
                         expected_transit_delta_chiSq=0.0
@@ -296,12 +325,35 @@ print,systime(/UTC)+'|Starting FORTRAN version of test_qpt...'
                         expected_transit_delta_chiSq=0.0
                         for j=0,n_elements(in_transit_cadences)-1 do begin
                             if sigma_array_polypulse[idepth,iq,in_transit_cadences[j]] ne 0.0 then begin
-                                expected_transit_delta_chiSq += depth[idepth]*depth[idepth]/sigma_array_polypulse[idepth,iq,in_transit_cadences[j]]^2.
+                                expected_transit_delta_chiSq += (depth[idepth]/sigma_array_polypulse[idepth,iq,in_transit_cadences[j]])^2.
                             endif
                         endfor
                     endelse
                     expected_total_delta_chiSq[idepth,iq] += expected_transit_delta_chiSq
+
+                    ;Calculating sigma(transit event signals),
+                    ;And see if any of the signals are very far off from expected.
+                    ;If only one or two transits have a strong signal, it's probably not real
+                    if in_transit_cadences[0] eq -1 then begin 
+                        transit_delta_chiSq[i] = -1.0
+                    endif else begin
+                        transit_delta_chiSq[i] = ftotal[start_of_transit_cadences[i]]
+                    endelse
                 endfor
+                
+                observed_transit_delta_chiSq = transit_delta_chiSq[where(transit_delta_chiSq ne -1.0)]
+                robust_sig = robust_sigma(observed_transit_delta_chiSq)
+                median_delta_chiSq = median(observed_transit_delta_chiSq)
+                max_delta_chiSq = max(observed_transit_delta_chiSq)
+                second_delta_chiSq = max(observed_transit_delta_chiSq[observed_transit_delta_chiSq ne max_delta_chiSq])
+
+                total_calculated_signal[idepth,iq] = total(observed_transit_delta_chiSq) ;should be same as that produced by QATS
+                good_transit_count[idepth,iq] = n_elements(observed_transit_delta_chiSq) ;If only 3, then having two transits dominate the signal not so strange...
+                max_dist_from_med[idepth,iq] = (max_delta_chiSq - median_delta_chiSq) / robust_sig ;If very large, confirms that this transit event probably outlier
+                frac_signal_from_max[idepth,iq] = max_delta_chiSq / total_calculated_signal[idepth,iq] ;If very close to one, maybe suspicious signal?
+                frac_signal_from_2[idepth,iq] = (second_delta_chiSq+max_delta_chiSq) / total_calculated_signal[idepth,iq] ;If very close to one, maybe suspicious signal?
+
+
 
 ;will be getting rid of this stuff because the new cut involves comparing the delta chi squared of the peak to the expected value
 ;more than one ; means the line was already commented out
@@ -359,14 +411,18 @@ print,systime(/UTC)+'|Starting FORTRAN version of test_qpt...'
             endelse
         endfor
     endfor
+    print,'time for QATS part of code: '+string(systime(1)-temptime) ;CHECKING RUN TIMMEEEEE
     cd,current_dir
     device,/close
 ;    save,time,fsap,f,sntot,pmin,pmax,depth,ndepth,tdur,ndur,ephem,tt,datamax,filename=working_dir+'qats_depth_dur_'+kids+'.sav'
     OpenW,lun,working_dir+'expected_vs_actual_qats_peaks.txt',/get_lun
-    printf,lun,'ndepth      ndur    peak_period  peak_signal  expected_peak_signal'
+    printf,lun,'#depth    tdur(hrs)    peak_period normpeak_sig  peak_signal  peak_expect '+ $
+    'calcd_sig good_trans max-med %sig_max %sig_2'
     for i=0,ndepth-1 do begin
         for j=0,ndur-1 do begin
-            printf,lun,i,j,peak_period[i,j],peak_signal[i,j],expected_total_delta_chiSq[i,j],FORMAT='(5(F10.3,x))'
+            printf,lun,depth[i],tdur[j]*24.,peak_period[i,j],max_chisq_rat[i,j],peak_signal[i,j],expected_total_delta_chiSq[i,j],$
+            total_calculated_signal[i,j],good_transit_count[i,j],max_dist_from_med[i,j],$
+            frac_signal_from_max[i,j],frac_signal_from_2[i,j],FORMAT='(4(F11.6,x),3(F12.3,x),4(F9.3))'
 	    endfor
     endfor
     Close,lun
@@ -391,11 +447,13 @@ print,systime(/UTC)+'|Starting FORTRAN version of test_qpt...'
 ;   spawn,'python '+common_data_root_dir+'input_txt_to_db.py '+working_dir+'qats_trim.txt '+kids
 ;	spawn,'rm '+working_dir+'qats_trim.txt'
     spawn,'gzip '+working_dir+'qats_trim.txt'
-;	spawn,'rm '+working_dir+'depth_distribution.sav'
-;	spawn,'rm '+working_dir+'kid'+kids+'_qats.ps'
+	spawn,'rm '+working_dir+'depth_distribution.sav'
+	spawn,'rm '+working_dir+'kid'+kids+'_qats.ps'
     spawn,'rm '+working_dir+'transit_times.txt'
     spawn,'rm '+working_dir+'lightcurve.in'
     spawn,'rm '+working_dir+'qats_spectrum.txt'
+    spawn,'rm '+working_dir+'tmpResultMySQL.tab'
+    spawn,'rm '+working_dir+'*donefile*'
     spawn,'touch '+working_dir+'donefile'
 endfor
 return
