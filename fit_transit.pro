@@ -174,7 +174,9 @@ for i=0L,number_of_bic_test_regions-1 do begin
     time_nogap_region_range=max(time_nogap_region) - min(time_nogap_region)
 ;print,'******',(time_nogap_region_range-max(tdur))/2.0
 ;print,'******',peak_period/2.0
-    window=min([ (time_nogap_region_range-max(tdur))/2.0 ,peak_period/2.0])
+;    window=min([ (time_nogap_region_range-max(tdur))/2.0 ,peak_period/2.0]) 
+;SOMETIMES peak_period is very small, removing for now
+    window=min([ (time_nogap_region_range-max(tdur))/2.0 ,max(tdur)]) 
     single_fit_time_baseline=max(tdur)+2.0*window
     index_start_nogap_region_trimmed=index_start_nogap_region
     dummy=min(abs(time-time[index_start_nogap_region]-single_fit_time_baseline),index_end_nogap_region_trimmed)
@@ -329,8 +331,6 @@ endif
 mask= mask and (abs(fsap-median(fsap,20)) lt outlier_threshold)
 
 ;char=get_kbrd(1)
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;TEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEST
-print,'I CAN"T LET U DO THAT, HALLLL'
 ;;=============================================================================
 ;;6.  Loop over light curve segments and do three kinds of fits to each
 ;;segment:  polynomial, polynomial+pulse (gridded), polynomial+step
