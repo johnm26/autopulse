@@ -118,6 +118,7 @@ bic_chosen_polynomial_orders=lonarr(number_of_bic_test_regions)
 for i=0L,number_of_bic_test_regions-1 do begin
 ;max_uninterrupted_length_between_gaps=max(uninterrupted_length_between_gaps,index_max_uninterrupted_length_between_gaps)
     max_uninterrupted_length_between_gaps=uninterrupted_length_between_gaps[index_uninterrupted_length_between_gaps_sorted[i]]
+    print,'uninterrupted length between gaps for test region #',i,': ',max_uninterrupted_length_between_gaps
     index_max_uninterrupted_length_between_gaps=index_uninterrupted_length_between_gaps_sorted[i]
     index_start_nogap_region=index_time_interval_gaps[index_max_uninterrupted_length_between_gaps]+1
     index_end_nogap_region=index_time_interval_gaps[index_max_uninterrupted_length_between_gaps+1]-1
@@ -165,7 +166,7 @@ for i=0L,number_of_bic_test_regions-1 do begin
 ;window=1d0
     ;window=max(tdur) ;TESTINGGGG REMOVED THE BELOW window= declaration!!!!!! 2/15 bvw - does bic depend on window size?
     time_nogap_region_range=max(time_nogap_region) - min(time_nogap_region)
-;print,'******',(time_nogap_region_range-max(tdur))/2.0
+    print,'time range of this region: ',(time_nogap_region_range);-max(tdur))/2.0
 ;print,'******',peak_period/2.0
     window=min([ (time_nogap_region_range-max(tdur))/2.0 ,peak_period/2.0])
     print,'window=',window,' median_time_interval=',median_time_interval  ;TESTTTTTTTTTTTTTTTTTTTTT
@@ -357,7 +358,8 @@ if keyword_set(plot_transit_detrends) then begin
     device,filename=working_dir+'kid'+kid+'_polyfits.ps',/color
     loadct,38
     colors=[0,30,60,90,220]
-    readcol,working_dir+'transit_times.txt',begin_transit_cadences,format='f'
+    readcol,working_dir+'transit_cadences.txt',begin_transit_cadences,format='f'
+    print,'times of transit read into detrending: ',time[begin_transit_cadences]
 endif
 
 ;;=============================================================================
@@ -411,7 +413,7 @@ for iseg=0,nseg-1 do begin
 ;;=============================================================================
             indx=i1+where((time[i1:i2]-time[itime]-tdur[idur]) lt window and $
                           (time[i1:i2]-time[itime]) gt -window and (mask[i1:i2] eq 1))
-            fit_window[itime] = n_elements(indx) ;TESTINGNGGGG***************************888
+            ;fit_window[itime] = n_elements(indx) ;TESTINGNGGGG***************************888
             iout=i1+where(((((time[i1:i2]-time[itime]-tdur[idur]) lt window) and ((time[i1:i2]-time[itime]-tdur[idur] gt 0d0))) or $
                            (((time[i1:i2]-time[itime]) gt -window) and ((time[i1:i2]-time[itime]) lt 0d0))) and (mask[i1:i2] eq 1))
             iin=where((time[indx] ge time[itime]) and (time[indx] le (time[itime]+tdur[idur])))
@@ -447,6 +449,13 @@ for iseg=0,nseg-1 do begin
                            thick=3;,/top,/right;,box=0,charthick=2
 
                         oplot,time[indx],yfit0,color=colors[1]
+                        if n_elements(all_transit_fluxes) eq 0 then begin
+                            all_transit_fluxes = flux
+                            all_transit_times = ttmp
+                        endif else begin
+                            all_transit_fluxes = [all_transit_fluxes,flux]
+                            all_transit_times = [all_transit_times,ttmp]
+                        endelse
                     endif
                 endif
 ;;=============================================================================
@@ -468,7 +477,7 @@ for iseg=0,nseg-1 do begin
 ;;6.2.1.2.2.1.2b Plot if we're at a beginning of a transit
                 if keyword_set(plot_transit_detrends) then begin
                     if indx_transit ne -1 then begin
-                        ;oplot,time[indx],yfit_stepfit,color=colors[2]
+                        oplot,time[indx],yfit_stepfit,color=colors[2]
                     endif
                 endif
 ;;=============================================================================
@@ -491,8 +500,9 @@ for iseg=0,nseg-1 do begin
 ;;6.2.1.2.3b Plot if we're at the beginning of a transit
                     if keyword_set(plot_transit_detrends) then begin
                         if indx_transit ne -1 then begin
-                            ;oplot,time[indx],yfit,color=colors[3]
-                            ;oplot,time[indx],yfit*model,color=colors[4]
+                            oplot,time[indx],yfit,color=colors[3]
+                            oplot,time[indx],yfit*model,color=colors[4]
+                            ;print,'chisq_poly: ',chi0,' chisq_step: ',chi_stepfit,' chisq_pulse: ',chi
                         endif
                     endif
                     ;;Save chisq results for later analysis
@@ -501,23 +511,33 @@ for iseg=0,nseg-1 do begin
                     chisq_array_polystep[idepth,idur,itime]=chi_stepfit
                     ;;ADDED BY BEN,1/29/13, CHANGING OUR chi0 TO BE chisq(polypulsefit compared to actual data) as opposed to chisq(polyfit)
                     ;;This will return a stronger signal for an actual transit event (effectively masking the transit out of the polyfit).
+                    chi0_orig=chi0
                     chi0 = total( ((yfit-flux)/ssap[indx])^2 )
+                    ;if chi0 gt 40000. then stop
                     ;;Save best chisq for passing up to compute_qats         
                     if (idepth eq 0) then begin
                         chisq_array[idepth,idur,itime]=chi
                     endif else begin
-                        value_best_chi=min([chi,chi_stepfit],index_best_chi)
+                        value_best_chi=min([chi,chi_stepfit,chi0_orig],index_best_chi)
                         if index_best_chi eq 0 then begin
 ;!!!Need to add dimensions to chisq_array so we can go back after the fact and
 ;plot the chi values of all three kinds of fits and analyze what
 ;happened to all three as a function of time.  EA, BLL, 24Sep2012.
                             chisq_array[idepth,idur,itime]=chi0-chi
                         endif else begin
-                            ;;Want case where step func. gives better fit (lower
-                            ;;chisq) to yield a negative value in chisq_array:
-                            chisq_array[idepth,idur,itime]=chi_stepfit-chi
+                            if index_best_chi eq 1 then begin
+                                ;;Want case where step func. gives better fit (lower
+                                ;;chisq) to yield a negative value in chisq_array:
+                                chisq_array[idepth,idur,itime]=chi_stepfit-chi
+                            endif else begin
+                                ;;Otherwise, the plain polynomial was best.
+                                chisq_array[idepth,idur,itime]=chi0_orig-chi
+                            endelse
                         endelse
                     endelse
+                    if keyword_set(plot_transit_detrends) then begin
+                        if indx_transit ne -1 then print,chisq_array[idepth,idur,itime];TEST
+                    endif
                     ;;Calculate sigma_array_polypulse to be passed to compute_qats
                     diff_y=flux_model-yfit
                     sorted_window=diff_y[sort(diff_y)]
@@ -546,7 +566,7 @@ for iseg=0,nseg-1 do begin
                 endfor
             endif
         endfor
-        if(itime mod 100 eq 0) then print,'completed: ',itime*ndur*ndepth/double(nt*ndepth*ndur)*100d0,'% steps'
+        ;if(itime mod 100 eq 0) then print,'completed: ',itime*ndur*ndepth/double(nt*ndepth*ndur)*100d0,'% steps'
     endfor
     for idur=0,ndur-1 do begin
         inz= where(reform(double(size_array[idur,i1:i2])) ne 0d0)
@@ -556,6 +576,7 @@ for iseg=0,nseg-1 do begin
 endfor
 err_flux=db_err_flux
 cd,working_dir
+;if keyword_set(plot_transit_detrends) then plot,all_transit_times,all_transit_fluxes,/YNOZERO
 if keyword_set(plot_transit_detrends) then device,/close
 save, $
   chisq_array, $
@@ -573,7 +594,8 @@ depth, $
   mask, $
   err_flux, $
   sigma_array_polypulse, $
-  fit_window,$
+  all_transit_times,$
+  all_transit_fluxes,$
   filename=working_dir+'depth_distribution.sav'
 spawn,'touch '+working_dir+fit_transit_donefile_name
 ;save,/all,filename='depth_distribution'+kid+'.sav'

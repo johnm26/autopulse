@@ -305,17 +305,22 @@ print,systime(/UTC)+'|Starting FORTRAN version of test_qpt...'
                     free_lun,lun
                 spawn,working_dir+'test_qpt'
                 readcol,working_dir+'transit_times.txt',start_of_transit_cadences,format='l'
-                ;start_of_transit_times = timetotal[start_of_transit_cadences] TESTINGGGG
-                start_of_transit_times = time[start_of_transit_cadences]
-
+                start_of_transit_times = timetotal[start_of_transit_cadences] ;TESTINGGGG
+                ;start_of_transit_times = time[start_of_transit_cadences]
+                print,'QATS strongest signal start of transit times: ',start_of_transit_times
+                ;print,'chi_sq values around a supposed transit: ',chisq_array[1,0,where((time ge start_of_transit_times[0]-0.01) and (time le start_of_transit_times[0]+0.01))]
+                for i=0,n_elements(start_of_transit_cadences)-1 do begin
+                    print,'chi_sq in QATS input around supposed transit ',i,': ',ftotal[start_of_transit_cadences[i]-10:start_of_transit_cadences[i]+10]
+                endfor
                 ;stuff Ben + Chris added:
                 ;Returns the cadences that are in the transit (of our peak QATS signal for the input depth and dur)
                 if keyword_set(single_depth_dur) then begin
                     openw,lun,working_dir+'transit_cadences.txt',/get_lun,/append
                     buffer_time = 0.5/24. ;half an hour, the buffer around our transit mask (we have duration uncertainty)
                     for i=0,n_elements(start_of_transit_cadences)-1 do begin
-                        in_transit_cadences = where((time ge start_of_transit_times[i]-buffer_time) and (time le start_of_transit_times[i]+tdur[iq]+buffer_time))
-                        printf,lun,in_transit_cadences
+                        ;in_transit_cadences = where((time ge start_of_transit_times[i]-buffer_time) and (time le start_of_transit_times[i]+tdur[iq]+buffer_time))
+                        in_transit_cadences_i = where((time ge start_of_transit_times[i]-0.005) and (time le start_of_transit_times[i]+0.005))
+                        printf,lun,in_transit_cadences_i
                     endfor
                     close,lun
                     free_lun,lun
